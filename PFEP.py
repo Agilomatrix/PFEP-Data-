@@ -75,14 +75,13 @@ BASE_WAREHOUSE_MAPPING = {
 
 # --- DISTANCE CALCULATION COMPONENTS (Unchanged, adapted for Streamlit caching) ---
 GEOCODING_CACHE = {}
-GEOLOCATOR = Nominatim(user_agent="inventory_distance_calculator_streamlit_v1", timeout=10)
+GEOLOCATOR = Nominatim(user_agent="inventory_distance_calculator_streamlit_v2", timeout=10)
 
 @st.cache_data
 def get_lat_lon(pincode, country="India", city="", state="", retries=3, backoff_factor=2):
     pincode_str = str(pincode).strip().split('.')[0]
     if not pincode_str.isdigit() or int(pincode_str) == 0:
         return (None, None)
-    # Cache key format changed slightly for Streamlit's caching
     query_key = f"{pincode_str}|{country}|{city}|{state}"
     query = f"{pincode_str}, {city}, {state}, {country}" if city and state else f"{pincode_str}, {country}"
     for attempt in range(retries):
@@ -108,7 +107,6 @@ def get_distance_code(distance):
 # --- 2. DATA LOADING AND CONSOLIDATION (ADAPTED FOR STREAMLIT) ---
 
 def read_uploaded_file(uploaded_file):
-    """Reads a Streamlit UploadedFile into a pandas DataFrame."""
     try:
         if uploaded_file.name.lower().endswith('.csv'):
             return pd.read_csv(uploaded_file, low_memory=False)
@@ -194,7 +192,7 @@ def load_and_consolidate_data(uploaded_files, daily_mult_1, daily_mult_2):
     vendor_master_df = None
 
     with st.spinner("Processing uploaded files..."):
-        # --- Step 1: Process ALL uploaded files and sort them by type ---
+        # --- Process files based on the dictionary from the UI ---
         if 'vendor_master' in uploaded_files and uploaded_files['vendor_master']:
             st.write("Processing Vendor Master file...")
             df = read_uploaded_file(uploaded_files['vendor_master'])
@@ -203,20 +201,21 @@ def load_and_consolidate_data(uploaded_files, daily_mult_1, daily_mult_2):
 
         if 'packaging' in uploaded_files and uploaded_files['packaging']:
             st.write("Processing Packaging Details file(s)...")
-            for i, f in enumerate(uploaded_files['packaging']):
+            for f in uploaded_files['packaging']:
                 df = read_uploaded_file(f)
                 if df is not None:
                     pkg_dfs.append(find_and_rename_columns(df))
 
         file_type_map = {"PBOM": pbom_dfs, "MBOM": mbom_dfs, "Part Attribute": part_attr_dfs}
-        for file_type, df_list in file_type_map.items():
-            if file_type.lower().replace(" ", "_") in uploaded_files and uploaded_files[file_type.lower().replace(" ", "_")]:
-                 st.write(f"Processing {file_type} file(s)...")
-                 for i, f in enumerate(uploaded_files[file_type.lower().replace(" ", "_")]):
+        for key, df_list in file_type_map.items():
+            internal_key = key.lower().replace(" ", "_")
+            if internal_key in uploaded_files and uploaded_files[internal_key]:
+                 st.write(f"Processing {key} file(s)...")
+                 for i, f in enumerate(uploaded_files[internal_key]):
                      df = read_uploaded_file(f)
                      if df is not None:
-                         df_list.append(find_and_rename_columns(df, i + 1 if "BOM" in file_type else None))
-
+                         df_list.append(find_and_rename_columns(df, i + 1 if "BOM" in key else None))
+        
         # --- Step 2: Consolidate BOMs ---
         st.subheader("BOM CONSOLIDATION")
         pbom_master = _consolidate_bom_list(pbom_dfs)
@@ -230,14 +229,12 @@ def load_and_consolidate_data(uploaded_files, daily_mult_1, daily_mult_2):
         # --- Step 3 & 4: Merge all supplementary data ---
         st.subheader("MERGING DATA")
         final_df = master_bom
-        # Merge Part Attribute and Packaging first
         for df in part_attr_dfs + pkg_dfs:
             if df is not None and 'part_id' in df.columns:
                 final_df = _merge_supplementary_df(final_df, df)
                 st.info("✅ Supplementary part/packaging data merged.")
             else: st.warning("⚠️ Skipping a file as it lacks 'PARTNO'.")
 
-        # Merge Vendor Master
         if vendor_master_df is not None:
             if 'part_id' in vendor_master_df.columns:
                 st.info("Found 'PARTNO' in Vendor Master. Merging data based on Part Number...")
@@ -339,7 +336,7 @@ class ComprehensiveInventoryProcessor:
                     uploaded_df.rename(columns={pfep_name: internal_key, 'PARTNO': 'part_id'}, inplace=True)
                     self.data = _merge_supplementary_df(self.data, uploaded_df[['part_id', internal_key]])
                     st.success(f"✅ Manual changes for {step_name} applied.")
-                    st.session_state[f'processed_data_{internal_key}'] = self.data # Update session state
+                    st.session_state[f'processed_data_{internal_key}'] = self.data
                 else:
                     st.error("Upload failed or file is invalid. Please ensure 'PARTNO' and '{pfep_name}' columns exist.")
 
@@ -502,32 +499,52 @@ def main():
     if 'final_report' not in st.session_state:
         st.session_state.final_report = None
 
+    uploaded_files = {}
 
-    # --- Sidebar for Inputs ---
-    with st.sidebar:
-        st.header("1. File Uploads")
-        st.info("Upload files in the specified order. BOM files are mandatory.")
+    # --- Step 1: File Uploads in Main Bar ---
+    st.header("Step 1: Upload Data Files")
+    st.info("Select 'Yes' to reveal the uploader for each file type. BOM files are mandatory.")
+    
+    file_options = [
+        ("Vendor Master", "vendor_master", False),
+        ("Packaging Details", "packaging", True),
+        ("PBOM", "pbom", True),
+        ("MBOM", "mbom", True),
+        ("Part Attribute", "part_attribute", True)
+    ]
 
-        # Reordered file uploads
-        uploaded_files = {}
-        uploaded_files['vendor_master'] = st.file_uploader("Upload Vendor Master File (Optional)", type=['csv', 'xlsx'])
-        uploaded_files['packaging'] = st.file_uploader("Upload Packaging Details File(s) (Optional)", type=['csv', 'xlsx'], accept_multiple_files=True)
-        uploaded_files['pbom'] = st.file_uploader("Upload PBOM File(s)", type=['csv', 'xlsx'], accept_multiple_files=True)
-        uploaded_files['mbom'] = st.file_uploader("Upload MBOM File(s)", type=['csv', 'xlsx'], accept_multiple_files=True)
-        uploaded_files['part_attribute'] = st.file_uploader("Upload Part Attribute File(s) (Optional)", type=['csv', 'xlsx'], accept_multiple_files=True)
+    for display_name, key_name, is_multiple in file_options:
+        st.markdown(f"**{display_name}**")
+        if st.radio(f"Upload a {display_name} file?", ('No', 'Yes'), key=f"radio_{key_name}", horizontal=True, label_visibility="collapsed") == 'Yes':
+            uploaded_files[key_name] = st.file_uploader(
+                f"Upload {display_name} File(s)",
+                type=['csv', 'xlsx'],
+                accept_multiple_files=is_multiple,
+                key=f"upload_{key_name}"
+            )
 
+    st.markdown("---")
+    
+    # --- Step 2: Production & Location Inputs ---
+    st.header("Step 2: Enter Parameters")
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        daily_mult_1 = st.number_input("Daily production for Vehicle Type 1", min_value=0.0, value=1.0, step=0.1)
+    with col2:
+        daily_mult_2 = st.number_input("Daily production for Vehicle Type 2", min_value=0.0, value=1.0, step=0.1)
+    with col3:
+        pincode = st.text_input("Your location's pincode", value="411001")
+    
+    st.markdown("---")
 
-        st.header("2. Production Inputs")
-        daily_mult_1 = st.number_input("Enter daily production quantity for Vehicle Type 1", min_value=0.0, value=1.0, step=0.1)
-        daily_mult_2 = st.number_input("Enter daily production quantity for Vehicle Type 2", min_value=0.0, value=1.0, step=0.1)
-
-        st.header("3. Location Input")
-        pincode = st.text_input("Enter your location's pincode", value="411001")
-
-
-    # --- Main Processing Area ---
+    # --- Step 3: Start Analysis ---
+    st.header("Step 3: Run Analysis")
     if st.button("🚀 Start Comprehensive Analysis"):
-        if not uploaded_files['pbom'] and not uploaded_files['mbom']:
+        # The logic for single file uploads needs to handle the case where it's not a list
+        has_pbom = 'pbom' in uploaded_files and uploaded_files['pbom']
+        has_mbom = 'mbom' in uploaded_files and uploaded_files['mbom']
+
+        if not has_pbom and not has_mbom:
             st.error("You must upload at least one PBOM or MBOM file to start the analysis.")
         else:
             st.session_state.processing_started = True
@@ -538,9 +555,10 @@ def main():
             else:
                 st.session_state.processing_started = False
 
+    # --- Main Processing and Display Area ---
     if st.session_state.processing_started and st.session_state.master_df is not None:
         st.markdown("---")
-        st.header("Processing Steps")
+        st.header("Processing Steps & Results")
         processor = ComprehensiveInventoryProcessor(st.session_state.master_df)
 
         processor.run_family_classification()
@@ -550,17 +568,16 @@ def main():
         if pincode and pincode.isdigit():
             processor.run_location_based_norms(pincode)
         else:
-            st.error("Invalid Pincode provided. Please enter a valid pincode in the sidebar.")
+            st.error("Invalid Pincode provided. Please enter a valid pincode.")
 
         processor.run_warehouse_location_assignment()
 
-        # Generate and store the final report in session state
+        # Generate and store the final report
         st.session_state.final_report = create_formatted_excel_output(processor.data)
         st.balloons()
         st.success("🎉 End-to-end process complete!")
 
-
-    # --- Download Button for Final Report ---
+    # --- Download Button ---
     if st.session_state.final_report:
         st.markdown("---")
         st.header("Download Final Report")
