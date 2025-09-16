@@ -11,6 +11,9 @@ import io
 # --- App Configuration ---
 st.set_page_config(page_title="Inventory & Supply Chain Analysis System", layout="wide")
 
+# --- (All constants and functions from before line 316 are the same) ---
+# --- PASTE THE UNCHANGED CODE HERE ---
+# ...
 # --- 1. MASTER TEMPLATE AND LOGIC CONSTANTS (Unchanged) ---
 
 ALL_TEMPLATE_COLUMNS = [
@@ -187,7 +190,6 @@ def _merge_supplementary_df(main_df, new_df):
     main_df.update(new_df)
     return main_df.reset_index()
 
-# MODIFIED FUNCTION with better user feedback
 def load_and_consolidate_data(uploaded_files, daily_mult_1, daily_mult_2):
     pbom_dfs, mbom_dfs, part_attr_dfs, pkg_dfs = [], [], [], []
     vendor_master_df = None
@@ -216,15 +218,12 @@ def load_and_consolidate_data(uploaded_files, daily_mult_1, daily_mult_2):
         st.subheader("BOM CONSOLIDATION")
         pbom_master = _consolidate_bom_list(pbom_dfs)
         mbom_master = _consolidate_bom_list(mbom_dfs)
-
-        # --- NEW: Enhanced User Feedback ---
         if pbom_master is not None and mbom_master is not None:
             st.info("Both PBOM and MBOM files were processed. Merging them into a master BOM.")
         elif pbom_master is not None:
             st.info("Only PBOM files were processed. Using them as the master BOM.")
         elif mbom_master is not None:
             st.info("Only MBOM files were processed. Using them as the master BOM.")
-        # --- End of New Feedback ---
 
         master_bom = _consolidate_bom_list([d for d in [pbom_master, mbom_master] if d is not None])
 
@@ -258,9 +257,6 @@ def load_and_consolidate_data(uploaded_files, daily_mult_1, daily_mult_2):
         final_df['net_daily_consumption'] = final_df['qty_veh_1_daily'] + final_df['qty_veh_2_daily']
         st.success("Initial data consolidation and calculation complete!")
     return final_df
-
-
-# --- (The rest of the file: Classes and main function remain unchanged) ---
 
 # --- 3. PERCENTAGE-BASED PART CLASSIFICATION ---
 class PartClassificationSystem:
@@ -314,7 +310,7 @@ class PartClassificationSystem:
         if self.parts_data is None or not self.calculated_ranges: return None
         return self.parts_data[self.price_column].apply(self.classify_part)
 
-# --- 4. DATA PROCESSING CLASS ---
+# --- 4. DATA PROCESSING CLASS (CLASS MODIFIED)---
 class ComprehensiveInventoryProcessor:
     def __init__(self, initial_data):
         self.data = initial_data.copy()
@@ -399,6 +395,9 @@ class ComprehensiveInventoryProcessor:
         st.success("✅ Percentage-based part classification complete.")
         self.manual_review_step('part_classification', 'Part Classification')
 
+    # ##########################################################################
+    # ### THIS IS THE CORRECTED FUNCTION ###
+    # ##########################################################################
     def run_location_based_norms(self, pincode):
         st.subheader(f"(4/6) Distance & Inventory Norms")
         with st.spinner(f"Getting coordinates for location pincode: {pincode}..."):
@@ -426,12 +425,28 @@ class ComprehensiveInventoryProcessor:
         self.data['RM IN DAYS'] = self.data['inventory_classification'].map(self.rm_days_mapping)
         self.data['RM IN QTY'] = self.data['RM IN DAYS'] * pd.to_numeric(self.data.get('net_daily_consumption'), errors='coerce')
         self.data['RM IN INR'] = self.data['RM IN QTY'] * pd.to_numeric(self.data.get('unit_price'), errors='coerce')
-        qty_per_pack = pd.to_numeric(self.data.get('qty_per_pack'), errors='coerce').fillna(1).replace(0, 1)
-        packing_factor = pd.to_numeric(self.data.get('packing_factor', 1), errors='coerce').fillna(1)
+        
+        # --- FIX STARTS HERE ---
+        # Robustly handle 'qty_per_pack'
+        if 'qty_per_pack' in self.data.columns:
+            qty_per_pack = pd.to_numeric(self.data['qty_per_pack'], errors='coerce').fillna(1).replace(0, 1)
+        else:
+            st.warning("Column 'QTY/PACK_Sec' not found. Defaulting quantity per pack to 1 for all parts.")
+            qty_per_pack = 1 # Use scalar 1, pandas will broadcast it during multiplication
+
+        # Robustly handle 'packing_factor'
+        if 'packing_factor' in self.data.columns:
+            packing_factor = pd.to_numeric(self.data['packing_factor'], errors='coerce').fillna(1)
+        else:
+            st.warning("Column 'PACKING FACTOR (PF)' not found. Defaulting packing factor to 1 for all parts.")
+            packing_factor = 1 # Use scalar 1
+        # --- FIX ENDS HERE ---
+
         self.data['NO OF SEC. PACK REQD.'] = np.ceil(self.data['RM IN QTY'] / qty_per_pack)
         self.data['NO OF SEC REQ. AS PER PF'] = np.ceil(self.data['NO OF SEC. PACK REQD.'] * packing_factor)
         st.success(f"✅ Inventory norms calculated.")
         self.manual_review_step('inventory_classification', 'Inventory Norms')
+
 
     def run_warehouse_location_assignment(self):
         st.subheader("\n(5/6) Warehouse Location Assignment")
