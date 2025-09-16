@@ -11,14 +11,12 @@ import io
 # --- App Configuration ---
 st.set_page_config(page_title="Inventory & Supply Chain Analysis System", layout="wide")
 
-# --- (All constants and functions from before line 316 are the same) ---
-# --- PASTE THE UNCHANGED CODE HERE ---
-# ...
-# --- 1. MASTER TEMPLATE AND LOGIC CONSTANTS (Unchanged) ---
-
-ALL_TEMPLATE_COLUMNS = [
-    'SR.NO', 'PARTNO', 'PART DESCRIPTION', 'Qty/Veh 1', 'Qty/Veh 2', 'TOTAL', 'UOM', 'ST.NO',
-    'FAMILY', 'Qty/Veh 1_Daily', 'Qty/Veh 2_Daily', 'NET', 'UNIT PRICE', 'PART CLASSIFICATION',
+# --- 1. MASTER TEMPLATE AND LOGIC CONSTANTS ---
+# This is now just a base, it will be modified dynamically
+BASE_TEMPLATE_COLUMNS = [
+    'SR.NO', 'PARTNO', 'PART DESCRIPTION', # Placeholder for dynamic Qty/Veh cols
+    'UOM', 'ST.NO', 'FAMILY', # Placeholder for dynamic Qty/Veh_Daily cols
+    'NET', 'UNIT PRICE', 'PART CLASSIFICATION',
     'L-MM_Size', 'W-MM_Size', 'H-MM_Size', 'Volume (m^3)', 'SIZE CLASSIFICATION', 'VENDOR CODE',
     'VENDOR NAME', 'VENDOR TYPE', 'CITY', 'STATE', 'COUNTRY', 'PINCODE', 'PRIMARY PACK TYPE',
     'L-MM_Prim_Pack', 'W-MM_Prim_Pack', 'H-MM_Prim_Pack', 'QTY/PACK_Prim', 'PRIM. PACK LIFESPAN',
@@ -34,8 +32,7 @@ ALL_TEMPLATE_COLUMNS = [
 ]
 
 PFEP_COLUMN_MAP = {
-    'part_id': 'PARTNO', 'description': 'PART DESCRIPTION', 'qty_veh': 'Qty/Veh',
-    'qty/veh': 'Qty/Veh', 'quantity_per_vehicle': 'Qty/Veh',
+    'part_id': 'PARTNO', 'description': 'PART DESCRIPTION',
     'net_daily_consumption': 'NET', 'unit_price': 'UNIT PRICE',
     'vendor_code': 'VENDOR CODE', 'vendor_name': 'VENDOR NAME', 'city': 'CITY',
     'state': 'STATE', 'country': 'COUNTRY', 'pincode': 'PINCODE',
@@ -76,9 +73,8 @@ BASE_WAREHOUSE_MAPPING = {
     "Aluminium": "HRR", "ACP Sheet": "MEZ C-02(B)", "Handle": "HRR", "HATCH": "HRR", "HDF Board": "MRR(C-01)", "FRP": "CTR", "Others": "HRR"
 }
 
-# --- DISTANCE CALCULATION COMPONENTS (Unchanged) ---
-GEOLOCATOR = Nominatim(user_agent="inventory_distance_calculator_streamlit_v3", timeout=10)
-
+# --- DISTANCE CALCULATION COMPONENTS ---
+GEOLOCATOR = Nominatim(user_agent="inventory_distance_calculator_streamlit_v4", timeout=10)
 @st.cache_data
 def get_lat_lon(pincode, country="India", city="", state="", retries=3, backoff_factor=2):
     pincode_str = str(pincode).strip().split('.')[0]
@@ -102,7 +98,7 @@ def get_distance_code(distance):
     elif distance <= 750: return 3
     else: return 4
 
-# --- 2. DATA LOADING AND CONSOLIDATION (Functions Corrected) ---
+# --- 2. DYNAMIC DATA LOADING AND CONSOLIDATION ---
 
 def read_uploaded_file(uploaded_file):
     try:
@@ -116,32 +112,30 @@ def read_uploaded_file(uploaded_file):
         st.error(f"Error reading file {uploaded_file.name}: {e}")
         return None
 
-def find_qty_veh_column(df):
-    possible_names = [
-        'qty/veh', 'Qty/Veh', 'QTY/VEH', 'qty_veh', 'Qty_Veh', 'quantity/vehicle',
-        'Quantity/Vehicle', 'QUANTITY/VEHICLE', 'qty per veh', 'Qty Per Veh',
-        'QTY PER VEH', 'vehicle qty', 'Vehicle Qty', 'VEHICLE QTY'
-    ]
-    for col in df.columns:
-        if str(col).lower().strip() in [p.lower() for p in possible_names]:
-            return col
-    return None
-
-def find_and_rename_columns(df, file_number=None):
+def find_and_rename_columns(df):
+    """Dynamically finds all Qty/Veh columns and standardizes them."""
     rename_dict, found_keys = {}, []
-    qty_veh_col = find_qty_veh_column(df)
-    if qty_veh_col:
-        if file_number == 1: rename_dict[qty_veh_col] = 'qty_veh_1'
-        elif file_number == 2: rename_dict[qty_veh_col] = 'qty_veh_2'
-        else: rename_dict[qty_veh_col] = 'qty_veh'
-        found_keys.append(rename_dict[qty_veh_col])
+    
+    # Standard columns
     for internal_key, pfep_name in PFEP_COLUMN_MAP.items():
-        if internal_key in ['qty_veh', 'qty/veh', 'quantity_per_vehicle']: continue
         for col in df.columns:
             if str(col).lower().strip() == pfep_name.lower():
                 rename_dict[col] = internal_key
                 found_keys.append(internal_key)
                 break
+    
+    # Dynamic Qty/Veh columns
+    qty_veh_regex = re.compile(r'(qty|quantity)[\s_/]?p?e?r?[\s_/]?veh(icle)?', re.IGNORECASE)
+    qty_veh_cols = [col for col in df.columns if qty_veh_regex.search(str(col))]
+    
+    for original_col in qty_veh_cols:
+        # Avoid renaming a column that's already been targeted
+        if original_col not in rename_dict:
+            # Store the original name for later reference if needed
+            # For simplicity, we just rename them sequentially
+            rename_dict[original_col] = f"qty_veh_temp_{original_col}"
+            found_keys.append(f"qty_veh_temp_{original_col} (from {original_col})")
+
     df.rename(columns=rename_dict, inplace=True)
     if found_keys:
         st.info(f"   Found and mapped columns: {found_keys}")
@@ -149,31 +143,36 @@ def find_and_rename_columns(df, file_number=None):
         st.warning("   Could not automatically map any standard columns.")
     return df
 
-def process_and_diagnose_qty_columns(df):
-    for i in [1, 2]:
-        col_name = f'qty_veh_{i}'
-        if col_name not in df.columns:
-            df[col_name] = 0
-        else:
-            numeric_col = pd.to_numeric(df[col_name], errors='coerce')
-            invalid_count = numeric_col.isna().sum()
-            if invalid_count > 0:
-                st.warning(f"Found {invalid_count} non-numeric values in 'Qty/Veh {i}'. Setting them to 0.")
-            df[col_name] = numeric_col.fillna(0)
-    return df
-
 def _consolidate_bom_list(bom_list):
     valid_boms = [df for df in bom_list if 'part_id' in df.columns]
     if not valid_boms:
         return None
+    
     master = valid_boms[0].copy()
-    for i, df in enumerate(valid_boms[1:], 2):
-        master = pd.merge(master, df, on='part_id', how='outer', suffixes=('', f'_temp{i}'))
-        overlap_cols = [c for c in df.columns if f"{c}_temp{i}" in master.columns]
+    temp_qty_cols_in_master = {c for c in master.columns if 'qty_veh_temp_' in c}
+
+    for df in valid_boms[1:]:
+        temp_qty_cols_in_df = {c for c in df.columns if 'qty_veh_temp_' in c}
+        
+        # Merge on part_id, keeping all parts from both
+        master = pd.merge(master, df, on='part_id', how='outer', suffixes=('_master', ''))
+        
+        # Coalesce overlapping standard columns (if any)
+        overlap_cols = [c for c in df.columns if f"{c}_master" in master.columns and c != 'part_id' and 'qty_veh_temp' not in c]
         for col in overlap_cols:
-            temp_col = f"{col}_temp{i}"
-            master[col] = master[col].fillna(master[temp_col])
-            master.drop(columns=[temp_col], inplace=True)
+            master[col] = master[col].fillna(master[f"{col}_master"])
+            master.drop(columns=[f"{col}_master"], inplace=True)
+
+        # Combine the quantity columns
+        all_qty_cols = temp_qty_cols_in_master.union(temp_qty_cols_in_df)
+        for col in all_qty_cols:
+            master_col_name = f"{col}_master"
+            if master_col_name in master.columns:
+                master[col] = master[col].fillna(master[master_col_name])
+                master.drop(columns=[master_col_name], inplace=True)
+        
+        temp_qty_cols_in_master = all_qty_cols
+
     return master
 
 def _merge_supplementary_df(main_df, new_df):
@@ -190,73 +189,61 @@ def _merge_supplementary_df(main_df, new_df):
     main_df.update(new_df)
     return main_df.reset_index()
 
-def load_and_consolidate_data(uploaded_files, daily_mult_1, daily_mult_2):
+def initial_data_load_and_detect(uploaded_files):
     pbom_dfs, mbom_dfs, part_attr_dfs, pkg_dfs = [], [], [], []
     vendor_master_df = None
 
-    with st.spinner("Processing uploaded files..."):
+    with st.spinner("Processing uploaded files and detecting vehicle columns..."):
         if 'vendor_master' in uploaded_files and uploaded_files['vendor_master']:
-            st.write("Processing Vendor Master file...")
             df = read_uploaded_file(uploaded_files['vendor_master'])
             if df is not None: vendor_master_df = find_and_rename_columns(df)
-
         if 'packaging' in uploaded_files and uploaded_files['packaging']:
-            st.write("Processing Packaging Details file(s)...")
             for f in uploaded_files['packaging']:
                 df = read_uploaded_file(f)
                 if df is not None: pkg_dfs.append(find_and_rename_columns(df))
-
         file_type_map = {"PBOM": pbom_dfs, "MBOM": mbom_dfs, "Part Attribute": part_attr_dfs}
         for key, df_list in file_type_map.items():
             internal_key = key.lower().replace(" ", "_")
             if internal_key in uploaded_files and uploaded_files[internal_key]:
-                 st.write(f"Processing {key} file(s)...")
-                 for i, f in enumerate(uploaded_files[internal_key]):
+                 for f in uploaded_files[internal_key]:
                      df = read_uploaded_file(f)
-                     if df is not None: df_list.append(find_and_rename_columns(df, i + 1 if "BOM" in key else None))
+                     if df is not None: df_list.append(find_and_rename_columns(df))
 
         st.subheader("BOM CONSOLIDATION")
-        pbom_master = _consolidate_bom_list(pbom_dfs)
-        mbom_master = _consolidate_bom_list(mbom_dfs)
-        if pbom_master is not None and mbom_master is not None:
-            st.info("Both PBOM and MBOM files were processed. Merging them into a master BOM.")
-        elif pbom_master is not None:
-            st.info("Only PBOM files were processed. Using them as the master BOM.")
-        elif mbom_master is not None:
-            st.info("Only MBOM files were processed. Using them as the master BOM.")
-
-        master_bom = _consolidate_bom_list([d for d in [pbom_master, mbom_master] if d is not None])
+        master_bom = _consolidate_bom_list(pbom_dfs + mbom_dfs)
 
         if master_bom is None or master_bom.empty:
-            st.error("CRITICAL ERROR: Could not process BOM files. Please ensure at least one uploaded BOM file (PBOM or MBOM) contains a 'PARTNO' column.")
-            return None
+            st.error("CRITICAL ERROR: Could not process BOM files. Ensure at least one uploaded BOM file contains a 'PARTNO' column.")
+            return None, None
 
         st.success(f"Consolidated BOM base has {master_bom['part_id'].nunique()} unique parts.")
 
-        st.subheader("MERGING DATA")
         final_df = master_bom
-        for df in part_attr_dfs + pkg_dfs:
+        for df in part_attr_dfs + pkg_dfs + ([vendor_master_df] if vendor_master_df is not None else []):
             if df is not None and 'part_id' in df.columns:
                 final_df = _merge_supplementary_df(final_df, df)
-                st.info("✅ Supplementary part/packaging data merged.")
-            else: st.warning("⚠️ Skipping a supplementary file as it lacks 'PARTNO'.")
-
-        if vendor_master_df is not None:
-            if 'part_id' in vendor_master_df.columns:
-                st.info("Found 'PARTNO' in Vendor Master. Merging data based on Part Number...")
-                final_df = _merge_supplementary_df(final_df, vendor_master_df)
-                st.success("✅ Vendor data successfully merged.")
-            else: st.warning("⚠️ SKIPPED: The uploaded Vendor Master file does not contain a 'PARTNO' column.")
-        else: st.info("No Vendor Master file was uploaded. Skipping.")
 
         final_df.drop_duplicates(subset=['part_id'], keep='first', inplace=True)
-        final_df = process_and_diagnose_qty_columns(final_df)
-        final_df['total_qty'] = final_df['qty_veh_1'] + final_df['qty_veh_2']
-        final_df['qty_veh_1_daily'] = final_df['qty_veh_1'] * daily_mult_1
-        final_df['qty_veh_2_daily'] = final_df['qty_veh_2'] * daily_mult_2
-        final_df['net_daily_consumption'] = final_df['qty_veh_1_daily'] + final_df['qty_veh_2_daily']
-        st.success("Initial data consolidation and calculation complete!")
-    return final_df
+
+        # Find all detected Qty/Veh columns and standardize their names
+        detected_qty_cols = sorted([col for col in final_df.columns if 'qty_veh_temp_' in col])
+        rename_map = {old_name: f"qty_veh_{i}" for i, old_name in enumerate(detected_qty_cols)}
+        final_df.rename(columns=rename_map, inplace=True)
+        
+        final_qty_cols = sorted(rename_map.values())
+        
+        # Clean up numeric values in the detected columns
+        for col in final_qty_cols:
+            numeric_col = pd.to_numeric(final_df[col], errors='coerce')
+            invalid_count = numeric_col.isna().sum()
+            if invalid_count > 0:
+                st.warning(f"Found {invalid_count} non-numeric values in a quantity column. Setting them to 0.")
+            final_df[col] = numeric_col.fillna(0)
+
+        st.success(f"Detected {len(final_qty_cols)} unique 'Quantity per Vehicle' columns across all files.")
+        return final_df, final_qty_cols
+
+# --- (Classes and other functions remain largely the same, but will be called after user input) ---
 
 # --- 3. PERCENTAGE-BASED PART CLASSIFICATION ---
 class PartClassificationSystem:
@@ -310,43 +297,29 @@ class PartClassificationSystem:
         if self.parts_data is None or not self.calculated_ranges: return None
         return self.parts_data[self.price_column].apply(self.classify_part)
 
-# --- 4. DATA PROCESSING CLASS (CLASS MODIFIED)---
+# --- 4. DATA PROCESSING CLASS ---
 class ComprehensiveInventoryProcessor:
     def __init__(self, initial_data):
         self.data = initial_data.copy()
         self.rm_days_mapping = {'A1': 4, 'A2': 6, 'A3': 8, 'A4': 11, 'B1': 6, 'B2': 11, 'B3': 13, 'B4': 16, 'C1': 16, 'C2': 31}
         self.classifier = PartClassificationSystem()
 
-    def manual_review_step(self, internal_key, step_name):
-        pfep_name = INTERNAL_TO_PFEP_NEW_COLS.get(internal_key, PFEP_COLUMN_MAP.get(internal_key, internal_key))
+    def calculate_dynamic_consumption(self, qty_cols, multipliers):
+        """Calculates daily and net consumption for a dynamic number of vehicles."""
+        st.subheader("Calculating Daily & Net Consumption")
+        daily_cols = []
+        for i, col in enumerate(qty_cols):
+            daily_col_name = f"{col}_daily"
+            self.data[daily_col_name] = self.data[col] * multipliers[i]
+            daily_cols.append(daily_col_name)
 
-        if st.checkbox(f"Manually review '{pfep_name}' for {step_name}?", key=f"review_{internal_key}"):
-            filename = f"manual_review_{step_name.lower().replace(' ', '_')}.csv"
-            review_cols = ['part_id', 'description', internal_key]
-            review_df = self.data[[c for c in review_cols if c in self.data.columns]].copy()
-            review_df.rename(columns={internal_key: pfep_name, 'part_id': 'PARTNO', 'description': 'PART DESCRIPTION'}, inplace=True)
-
-            st.dataframe(review_df)
-            st.download_button(
-                label=f"Download '{filename}' for Manual Review",
-                data=review_df.to_csv(index=False).encode('utf-8'),
-                file_name=filename,
-                mime='text/csv',
-            )
-
-            uploaded_file = st.file_uploader("Upload the modified review file", type=['csv', 'xlsx'], key=f"upload_{internal_key}")
-            if uploaded_file:
-                uploaded_df = read_uploaded_file(uploaded_file)
-                if uploaded_df is not None and 'PARTNO' in uploaded_df.columns and pfep_name in uploaded_df.columns:
-                    uploaded_df.rename(columns={pfep_name: internal_key, 'PARTNO': 'part_id'}, inplace=True)
-                    self.data = _merge_supplementary_df(self.data, uploaded_df[['part_id', internal_key]])
-                    st.success(f"✅ Manual changes for {step_name} applied.")
-                    st.session_state[f'processed_data_{internal_key}'] = self.data
-                else:
-                    st.error("Upload failed or file is invalid. Please ensure 'PARTNO' and '{pfep_name}' columns exist.")
+        self.data['TOTAL'] = self.data[qty_cols].sum(axis=1)
+        self.data['net_daily_consumption'] = self.data[daily_cols].sum(axis=1)
+        st.success("Consumption calculated.")
+        return self.data
 
     def run_family_classification(self):
-        st.subheader("(1/6) Family Classification")
+        st.subheader("(A) Family Classification")
         if 'description' not in self.data.columns:
             self.data['family'] = 'Others'; return
         def find_kw_pos(desc, kw):
@@ -360,14 +333,12 @@ class ComprehensiveInventoryProcessor:
             return min(matches, key=lambda x: x[0])[1] if matches else 'Others'
         self.data['family'] = self.data['description'].apply(extract_family)
         st.success("✅ Automated family classification complete.")
-        self.manual_review_step('family', 'Family Classification')
 
     def run_size_classification(self):
-        st.subheader("\n(2/6) Size Classification")
+        st.subheader("(B) Size Classification")
         size_cols = ['length', 'width', 'height']
         if not all(k in self.data.columns for k in size_cols):
             self.data['volume_m3'], self.data['size_classification'] = None, 'Manual'
-            st.warning("Missing L/W/H columns. Size classification set to 'Manual'.")
             return
         for col in size_cols: self.data[col] = pd.to_numeric(self.data[col], errors='coerce')
         self.data['volume_m3'] = (self.data['length'] * self.data['width'] * self.data['height']) / 1_000_000_000
@@ -382,32 +353,23 @@ class ComprehensiveInventoryProcessor:
             return 'S'
         self.data['size_classification'] = self.data.apply(classify_size, axis=1)
         st.success("✅ Automated size classification complete.")
-        self.manual_review_step('size_classification', 'Size Classification')
 
     def run_part_classification(self):
-        st.subheader("\n(3/6) Part Classification")
+        st.subheader("(C) Part Classification")
         if 'unit_price' not in self.data.columns:
             self.data['part_classification'] = 'Manual'
-            st.warning("Missing 'Unit Price' column. Part classification set to 'Manual'.")
             return
         self.classifier.load_data_from_dataframe(self.data)
         self.data['part_classification'] = self.classifier.classify_all_parts()
         st.success("✅ Percentage-based part classification complete.")
-        self.manual_review_step('part_classification', 'Part Classification')
 
-    # ##########################################################################
-    # ### THIS IS THE CORRECTED FUNCTION ###
-    # ##########################################################################
     def run_location_based_norms(self, pincode):
-        st.subheader(f"(4/6) Distance & Inventory Norms")
+        st.subheader(f"(D) Distance & Inventory Norms")
         with st.spinner(f"Getting coordinates for location pincode: {pincode}..."):
             current_coords = get_lat_lon(pincode, country="India")
         if current_coords == (None, None):
             st.error(f"CRITICAL: Could not find coordinates for {pincode}. Distances cannot be calculated.")
-            self.data['DISTANCE CODE'], self.data['inventory_classification'] = None, None
-            self.data['RM IN DAYS'], self.data['RM IN QTY'], self.data['RM IN INR'] = None, None, None
             return
-        st.info(f"Processing vendor locations...")
         with st.spinner("Calculating distances to vendors... This may take a while."):
             def calculate_distance(row):
                 vendor_coords = get_lat_lon(row.get('pincode'), country="India", city=str(row.get('city', '')).strip(), state=str(row.get('state', '')).strip())
@@ -425,34 +387,18 @@ class ComprehensiveInventoryProcessor:
         self.data['RM IN DAYS'] = self.data['inventory_classification'].map(self.rm_days_mapping)
         self.data['RM IN QTY'] = self.data['RM IN DAYS'] * pd.to_numeric(self.data.get('net_daily_consumption'), errors='coerce')
         self.data['RM IN INR'] = self.data['RM IN QTY'] * pd.to_numeric(self.data.get('unit_price'), errors='coerce')
-        
-        # --- FIX STARTS HERE ---
-        # Robustly handle 'qty_per_pack'
-        if 'qty_per_pack' in self.data.columns:
-            qty_per_pack = pd.to_numeric(self.data['qty_per_pack'], errors='coerce').fillna(1).replace(0, 1)
-        else:
-            st.warning("Column 'QTY/PACK_Sec' not found. Defaulting quantity per pack to 1 for all parts.")
-            qty_per_pack = 1 # Use scalar 1, pandas will broadcast it during multiplication
-
-        # Robustly handle 'packing_factor'
-        if 'packing_factor' in self.data.columns:
-            packing_factor = pd.to_numeric(self.data['packing_factor'], errors='coerce').fillna(1)
-        else:
-            st.warning("Column 'PACKING FACTOR (PF)' not found. Defaulting packing factor to 1 for all parts.")
-            packing_factor = 1 # Use scalar 1
-        # --- FIX ENDS HERE ---
-
+        if 'qty_per_pack' in self.data.columns: qty_per_pack = pd.to_numeric(self.data['qty_per_pack'], errors='coerce').fillna(1).replace(0, 1)
+        else: qty_per_pack = 1
+        if 'packing_factor' in self.data.columns: packing_factor = pd.to_numeric(self.data['packing_factor'], errors='coerce').fillna(1)
+        else: packing_factor = 1
         self.data['NO OF SEC. PACK REQD.'] = np.ceil(self.data['RM IN QTY'] / qty_per_pack)
         self.data['NO OF SEC REQ. AS PER PF'] = np.ceil(self.data['NO OF SEC. PACK REQD.'] * packing_factor)
         st.success(f"✅ Inventory norms calculated.")
-        self.manual_review_step('inventory_classification', 'Inventory Norms')
-
 
     def run_warehouse_location_assignment(self):
-        st.subheader("\n(5/6) Warehouse Location Assignment")
+        st.subheader("(E) Warehouse Location Assignment")
         if 'family' not in self.data.columns:
             self.data['wh_loc'] = 'HRR'
-            st.warning("Missing 'Family' column. Defaulting warehouse location to 'HRR'.")
             return
         def get_wh_loc(row):
             fam, desc, vol_m3 = row.get('family', 'Others'), row.get('description', ''), row.get('volume_m3', None)
@@ -471,138 +417,209 @@ class ComprehensiveInventoryProcessor:
             return BASE_WAREHOUSE_MAPPING.get(fam, "HRR")
         self.data['wh_loc'] = self.data.apply(get_wh_loc, axis=1)
         st.success("✅ Automated warehouse location assignment complete.")
-        self.manual_review_step('wh_loc', 'Warehouse Location')
 
-# --- 5. FINAL EXCEL REPORT GENERATION ---
-def create_formatted_excel_output(df):
-    st.subheader("\n(6/6) Generating Formatted Excel Report")
+# --- 5. DYNAMIC FINAL EXCEL REPORT GENERATION ---
+def create_formatted_excel_output(df, vehicle_configs):
+    st.subheader("(F) Generating Formatted Excel Report")
+
+    # 1. Create dynamic rename map and final column list
+    final_df = df.copy()
+    rename_map = {**PFEP_COLUMN_MAP, **INTERNAL_TO_PFEP_NEW_COLS, 'TOTAL': 'TOTAL', 'inventory_classification': 'INVENTORY CLASSIFICATION'}
+    
+    qty_veh_cols = []
+    qty_veh_daily_cols = []
+    
+    for i, config in enumerate(vehicle_configs):
+        internal_qty_col = f"qty_veh_{i}"
+        internal_daily_col = f"qty_veh_{i}_daily"
+        
+        rename_map[internal_qty_col] = config['name']
+        rename_map[internal_daily_col] = f"{config['name']}_Daily"
+        
+        qty_veh_cols.append(config['name'])
+        qty_veh_daily_cols.append(f"{config['name']}_Daily")
+
+    final_df.rename(columns=rename_map, inplace=True)
+
+    # Construct the final dynamic column template
+    ALL_TEMPLATE_COLUMNS = []
+    ALL_TEMPLATE_COLUMNS.extend(BASE_TEMPLATE_COLUMNS[:3])
+    ALL_TEMPLATE_COLUMNS.extend(qty_veh_cols)
+    ALL_TEMPLATE_COLUMNS.append('TOTAL')
+    ALL_TEMPLATE_COLUMNS.extend(BASE_TEMPLATE_COLUMNS[3:5])
+    ALL_TEMPLATE_COLUMNS.extend(qty_veh_daily_cols)
+    ALL_TEMPLATE_COLUMNS.extend(BASE_TEMPLATE_COLUMNS[5:])
+    
+    # 2. Prepare the DataFrame
+    for col in ALL_TEMPLATE_COLUMNS:
+        if col not in final_df.columns: final_df[col] = ''
+    final_df = final_df[ALL_TEMPLATE_COLUMNS]
+    final_df['SR.NO'] = range(1, len(final_df) + 1)
+
+    # 3. Write to Excel with dynamic headers
     with st.spinner("Creating the final Excel report..."):
-        final_df = df.copy().loc[:, ~df.columns.duplicated()]
-        rename_map = {**PFEP_COLUMN_MAP, **INTERNAL_TO_PFEP_NEW_COLS,
-                      'qty_veh_1': 'Qty/Veh 1', 'qty_veh_2': 'Qty/Veh 2', 'total_qty': 'TOTAL',
-                      'qty_veh_1_daily': 'Qty/Veh 1_Daily', 'qty_veh_2_daily': 'Qty/Veh 2_Daily',
-                      'inventory_classification': 'INVENTORY CLASSIFICATION'}
-        final_df.rename(columns={k: v for k, v in rename_map.items() if k in final_df.columns}, inplace=True)
-        for col in ALL_TEMPLATE_COLUMNS:
-            if col not in final_df.columns: final_df[col] = ''
-        final_df = final_df[ALL_TEMPLATE_COLUMNS]
-        final_df['SR.NO'] = range(1, len(final_df) + 1)
-
         output = io.BytesIO()
         with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
             workbook = writer.book
             h_gray = workbook.add_format({'bold': True, 'text_wrap': True, 'valign': 'top', 'align': 'center', 'fg_color': '#D9D9D9', 'border': 1})
             s_orange = workbook.add_format({'bold': True, 'align': 'center', 'valign': 'vcenter', 'fg_color': '#FDE9D9', 'border': 1})
             s_blue = workbook.add_format({'bold': True, 'align': 'center', 'valign': 'vcenter', 'fg_color': '#DCE6F1', 'border': 1})
+            
             final_df.to_excel(writer, sheet_name='Master Data Sheet', startrow=2, header=False, index=False)
             worksheet = writer.sheets['Master Data Sheet']
-            headers = [
-                ('A1:H1', 'PART DETAILS', h_gray), ('I1:L1', 'Daily consumption', s_orange),
-                ('M1:N1', 'PRICE & CLASSIFICATION', s_orange), ('O1:S1', 'Size & Classification', s_orange),
-                ('T1:Z1', 'VENDOR DETAILS', s_blue), ('AA1:AO1', 'PACKAGING DETAILS', s_orange),
-                ('AP1:AW1', 'INVENTORY NORM', s_blue), ('AX1:BC1', 'WH STORAGE', s_orange),
-                ('BD1:BG1', 'SUPPLY SYSTEM', s_blue), ('BH1:BV1', 'LINE SIDE STORAGE', h_gray)
+
+            # Dynamic header range calculation
+            num_veh = len(vehicle_configs)
+            
+            # Static Headers
+            worksheet.merge_range('A1:C1', 'PART DETAILS', h_gray)
+            
+            # Dynamic Headers based on vehicle count
+            # Example: 2 vehicles -> D1:F1 for Qty/Veh, J1:L1 for Daily
+            part_details_end_col = 3 + num_veh
+            daily_consump_start_col = part_details_end_col + 2
+            daily_consump_end_col = daily_consump_start_col + num_veh
+            
+            worksheet.merge_range(0, 3, 0, part_details_end_col, 'PART DETAILS', h_gray)
+            worksheet.merge_range(0, daily_consump_start_col, 0, daily_consump_end_col, 'Daily consumption', s_orange)
+            
+            # Other headers need to be shifted based on number of vehicles
+            def colnum_string(n):
+                string = ""
+                while n > 0:
+                    n, remainder = divmod(n - 1, 26)
+                    string = chr(65 + remainder) + string
+                return string
+
+            current_col = daily_consump_end_col + 1
+            headers_config = [
+                ('PRICE & CLASSIFICATION', 2, s_orange), ('Size & Classification', 5, s_orange),
+                ('VENDOR DETAILS', 7, s_blue), ('PACKAGING DETAILS', 15, s_orange),
+                ('INVENTORY NORM', 8, s_blue), ('WH STORAGE', 8, s_orange),
+                ('SUPPLY SYSTEM', 4, s_blue), ('LINE SIDE STORAGE', 15, h_gray)
             ]
-            for r, t, f in headers: worksheet.merge_range(r, t, f)
-            worksheet.write('BW1', ALL_TEMPLATE_COLUMNS[-1], h_gray)
-            for col_num, value in enumerate(final_df.columns): worksheet.write(1, col_num, value, h_gray)
-            worksheet.set_column('A:A', 6); worksheet.set_column('B:C', 22); worksheet.set_column('D:BW', 18)
+            for title, num_cols, style in headers_config:
+                start_str = colnum_string(current_col)
+                end_str = colnum_string(current_col + num_cols - 1)
+                worksheet.merge_range(f"{start_str}1:{end_str}1", title, style)
+                current_col += num_cols
+
+            # Write column headers
+            for col_num, value in enumerate(final_df.columns):
+                worksheet.write(1, col_num, value, h_gray)
+            
+            worksheet.set_column('A:A', 6); worksheet.set_column('B:C', 22); worksheet.set_column('D:ZZ', 18)
+
         processed_data = output.getvalue()
     st.success(f"✅ Successfully created formatted Excel file!")
     return processed_data
 
 # --- 6. MAIN WORKFLOW ---
 def main():
-    st.title("🏭 Comprehensive Inventory & Supply Chain Analysis System")
+    st.title("🏭 Dynamic Inventory & Supply Chain Analysis System")
 
-    if 'processing_started' not in st.session_state:
-        st.session_state.processing_started = False
+    # Initialize session state
+    if 'app_stage' not in st.session_state:
+        st.session_state.app_stage = "upload"
     if 'master_df' not in st.session_state:
         st.session_state.master_df = None
+    if 'qty_cols' not in st.session_state:
+        st.session_state.qty_cols = []
     if 'final_report' not in st.session_state:
         st.session_state.final_report = None
 
-    uploaded_files = {}
-
+    # --- STAGE 1: UPLOAD ---
     st.header("Step 1: Upload Data Files")
-    st.info("Select 'Yes' to reveal the uploader for each file type. You must provide at least one BOM file (PBOM or MBOM).")
+    st.info("Upload all relevant files. The tool will automatically find all 'Quantity per Vehicle' columns.")
     
+    uploaded_files = {}
     file_options = [
-        ("Vendor Master", "vendor_master", False),
-        ("Packaging Details", "packaging", True),
-        ("PBOM", "pbom", True),
-        ("MBOM", "mbom", True),
-        ("Part Attribute", "part_attribute", True)
+        ("Vendor Master", "vendor_master", False), ("Packaging Details", "packaging", True),
+        ("PBOM", "pbom", True), ("MBOM", "mbom", True), ("Part Attribute", "part_attribute", True)
     ]
-
     for display_name, key_name, is_multiple in file_options:
-        st.markdown(f"**{display_name}**")
-        if st.radio(f"Upload a {display_name} file?", ('No', 'Yes'), key=f"radio_{key_name}", horizontal=True, label_visibility="collapsed") == 'Yes':
-            uploaded_files[key_name] = st.file_uploader(
-                f"Upload {display_name} File(s)",
-                type=['csv', 'xlsx'],
-                accept_multiple_files=is_multiple,
-                key=f"upload_{key_name}"
-            )
-
-    st.markdown("---")
+        with st.expander(f"Upload {display_name} File(s)"):
+            uploaded_files[key_name] = st.file_uploader(f"Upload", type=['csv', 'xlsx'], accept_multiple_files=is_multiple, key=f"upload_{key_name}", label_visibility="collapsed")
     
-    st.header("Step 2: Enter Parameters")
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        daily_mult_1 = st.number_input("Daily production for Vehicle Type 1", min_value=0.0, value=1.0, step=0.1)
-    with col2:
-        daily_mult_2 = st.number_input("Daily production for Vehicle Type 2", min_value=0.0, value=1.0, step=0.1)
-    with col3:
-        pincode = st.text_input("Your location's pincode", value="411001")
-    
-    st.markdown("---")
+    pincode = st.text_input("Enter your location's pincode for distance calculations", value="411001")
 
-    st.header("Step 3: Run Analysis")
-    if st.button("🚀 Start Comprehensive Analysis"):
+    if st.button("Detect Vehicle Columns & Consolidate Files"):
         has_pbom = 'pbom' in uploaded_files and uploaded_files['pbom']
         has_mbom = 'mbom' in uploaded_files and uploaded_files['mbom']
-
         if not has_pbom and not has_mbom:
-            st.error("You must upload at least one PBOM or MBOM file to start the analysis.")
+            st.error("You must upload at least one PBOM or MBOM file.")
         else:
-            st.session_state.processing_started = True
-            st.session_state.final_report = None
-            master_df = load_and_consolidate_data(uploaded_files, daily_mult_1, daily_mult_2)
-            if master_df is not None:
+            master_df, qty_cols = initial_data_load_and_detect(uploaded_files)
+            if master_df is not None and qty_cols:
                 st.session_state.master_df = master_df
-            else:
-                st.session_state.processing_started = False
+                st.session_state.qty_cols = qty_cols
+                st.session_state.app_stage = "configure"
+                st.rerun() # Rerun to show the configuration UI
+            elif master_df is not None:
+                st.warning("Data was loaded, but no 'Quantity per Vehicle' columns were detected. Please check your files.")
+                st.session_state.app_stage = "upload"
 
-    if st.session_state.processing_started and st.session_state.master_df is not None:
+    # --- STAGE 2: CONFIGURE ---
+    if st.session_state.app_stage == "configure":
         st.markdown("---")
-        st.header("Processing Steps & Results")
-        processor = ComprehensiveInventoryProcessor(st.session_state.master_df)
+        st.header("Step 2: Configure Vehicle Types")
+        st.info("We detected the following quantity columns. Please provide a descriptive name and daily production for each.")
 
+        vehicle_configs = []
+        for i, col_name in enumerate(st.session_state.qty_cols):
+            st.markdown(f"**Detected Column #{i+1}**")
+            cols = st.columns([2, 1])
+            name = cols[0].text_input("Custom Vehicle Name", value=f"Vehicle Type {i+1}", key=f"name_{i}")
+            multiplier = cols[1].number_input("Daily Production Quantity", min_value=0.0, value=1.0, step=0.1, key=f"mult_{i}")
+            vehicle_configs.append({"name": name, "multiplier": multiplier})
+
+        if st.button("🚀 Run Full Analysis"):
+            st.session_state.app_stage = "process"
+            st.session_state.vehicle_configs = vehicle_configs
+            st.session_state.pincode = pincode
+            st.rerun()
+
+    # --- STAGE 3: PROCESS & DOWNLOAD ---
+    if st.session_state.app_stage == "process":
+        st.markdown("---")
+        st.header("Step 3: Processing and Results")
+        
+        processor = ComprehensiveInventoryProcessor(st.session_state.master_df)
+        
+        # First, calculate consumption based on dynamic inputs
+        final_df = processor.calculate_dynamic_consumption(
+            st.session_state.qty_cols,
+            [c['multiplier'] for c in st.session_state.vehicle_configs]
+        )
+        
+        # Run all other processing steps
         processor.run_family_classification()
         processor.run_size_classification()
         processor.run_part_classification()
-
-        if pincode and pincode.isdigit():
-            processor.run_location_based_norms(pincode)
-        else:
-            st.error("Invalid Pincode provided. Please enter a valid pincode.")
-
+        processor.run_location_based_norms(st.session_state.pincode)
         processor.run_warehouse_location_assignment()
-
-        st.session_state.final_report = create_formatted_excel_output(processor.data)
+        
+        # Generate the final report
+        report_data = create_formatted_excel_output(processor.data, st.session_state.vehicle_configs)
+        st.session_state.final_report = report_data
+        
         st.balloons()
         st.success("🎉 End-to-end process complete!")
+        st.session_state.app_stage = "download"
+        st.rerun()
 
-    if st.session_state.final_report:
+    if st.session_state.app_stage == "download":
         st.markdown("---")
-        st.header("Download Final Report")
+        st.header("Step 4: Download Final Report")
         st.download_button(
             label="📥 Download Structured Inventory Data Final.xlsx",
             data=st.session_state.final_report,
             file_name='structured_inventory_data_final.xlsx',
             mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
         )
+        if st.button("Start Over"):
+            st.session_state.clear()
+            st.rerun()
 
 if __name__ == "__main__":
     main()
