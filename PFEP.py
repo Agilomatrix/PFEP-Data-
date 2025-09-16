@@ -74,7 +74,7 @@ BASE_WAREHOUSE_MAPPING = {
 }
 
 # --- DISTANCE CALCULATION COMPONENTS (Unchanged) ---
-GEOLOCATOR = Nominatim(user_agent="inventory_distance_calculator_streamlit_v2", timeout=10)
+GEOLOCATOR = Nominatim(user_agent="inventory_distance_calculator_streamlit_v3", timeout=10)
 
 @st.cache_data
 def get_lat_lon(pincode, country="India", city="", state="", retries=3, backoff_factor=2):
@@ -159,15 +159,10 @@ def process_and_diagnose_qty_columns(df):
             df[col_name] = numeric_col.fillna(0)
     return df
 
-# MODIFIED FUNCTION
 def _consolidate_bom_list(bom_list):
-    """Helper function to merge a list of BOM DataFrames, now more robust."""
-    # Filter out any dataframes that do not have the essential 'part_id' column
     valid_boms = [df for df in bom_list if 'part_id' in df.columns]
-
     if not valid_boms:
-        return None # Return None if no valid BOMs were found
-
+        return None
     master = valid_boms[0].copy()
     for i, df in enumerate(valid_boms[1:], 2):
         master = pd.merge(master, df, on='part_id', how='outer', suffixes=('', f'_temp{i}'))
@@ -177,7 +172,6 @@ def _consolidate_bom_list(bom_list):
             master[col] = master[col].fillna(master[temp_col])
             master.drop(columns=[temp_col], inplace=True)
     return master
-
 
 def _merge_supplementary_df(main_df, new_df):
     if 'part_id' not in new_df.columns: return main_df
@@ -193,13 +187,12 @@ def _merge_supplementary_df(main_df, new_df):
     main_df.update(new_df)
     return main_df.reset_index()
 
-# MODIFIED FUNCTION
+# MODIFIED FUNCTION with better user feedback
 def load_and_consolidate_data(uploaded_files, daily_mult_1, daily_mult_2):
     pbom_dfs, mbom_dfs, part_attr_dfs, pkg_dfs = [], [], [], []
     vendor_master_df = None
 
     with st.spinner("Processing uploaded files..."):
-        # Process files as before...
         if 'vendor_master' in uploaded_files and uploaded_files['vendor_master']:
             st.write("Processing Vendor Master file...")
             df = read_uploaded_file(uploaded_files['vendor_master'])
@@ -220,22 +213,27 @@ def load_and_consolidate_data(uploaded_files, daily_mult_1, daily_mult_2):
                      df = read_uploaded_file(f)
                      if df is not None: df_list.append(find_and_rename_columns(df, i + 1 if "BOM" in key else None))
 
-        # --- Step 2: Consolidate BOMs with new checks ---
         st.subheader("BOM CONSOLIDATION")
         pbom_master = _consolidate_bom_list(pbom_dfs)
         mbom_master = _consolidate_bom_list(mbom_dfs)
+
+        # --- NEW: Enhanced User Feedback ---
+        if pbom_master is not None and mbom_master is not None:
+            st.info("Both PBOM and MBOM files were processed. Merging them into a master BOM.")
+        elif pbom_master is not None:
+            st.info("Only PBOM files were processed. Using them as the master BOM.")
+        elif mbom_master is not None:
+            st.info("Only MBOM files were processed. Using them as the master BOM.")
+        # --- End of New Feedback ---
+
         master_bom = _consolidate_bom_list([d for d in [pbom_master, mbom_master] if d is not None])
 
-        # --- THIS IS THE CRITICAL FIX ---
-        # Check if master_bom is valid before proceeding
         if master_bom is None or master_bom.empty:
             st.error("CRITICAL ERROR: Could not process BOM files. Please ensure at least one uploaded BOM file (PBOM or MBOM) contains a 'PARTNO' column.")
-            return None # Stop execution
+            return None
 
-        # This line is now safe to run
         st.success(f"Consolidated BOM base has {master_bom['part_id'].nunique()} unique parts.")
 
-        # --- Step 3, 4, 5 proceed as before ---
         st.subheader("MERGING DATA")
         final_df = master_bom
         for df in part_attr_dfs + pkg_dfs:
@@ -260,6 +258,7 @@ def load_and_consolidate_data(uploaded_files, daily_mult_1, daily_mult_2):
         final_df['net_daily_consumption'] = final_df['qty_veh_1_daily'] + final_df['qty_veh_2_daily']
         st.success("Initial data consolidation and calculation complete!")
     return final_df
+
 
 # --- (The rest of the file: Classes and main function remain unchanged) ---
 
@@ -511,7 +510,7 @@ def main():
     uploaded_files = {}
 
     st.header("Step 1: Upload Data Files")
-    st.info("Select 'Yes' to reveal the uploader for each file type. BOM files are mandatory.")
+    st.info("Select 'Yes' to reveal the uploader for each file type. You must provide at least one BOM file (PBOM or MBOM).")
     
     file_options = [
         ("Vendor Master", "vendor_master", False),
