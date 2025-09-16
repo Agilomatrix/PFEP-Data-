@@ -120,8 +120,7 @@ def initial_data_load_and_detect(uploaded_files):
         
         master_df = _consolidate_dataframes(all_dfs)
         if master_df is None or master_df.empty:
-            st.error("CRITICAL ERROR: Failed to consolidate files.")
-            return None, None
+            st.error("CRITICAL ERROR: Failed to consolidate files."); return None, None
         
         master_df.drop_duplicates(subset=['part_id'], keep='first', inplace=True)
         detected_qty_cols = sorted([col for col in master_df.columns if 'qty_veh_temp_' in col])
@@ -149,12 +148,14 @@ class PartClassificationSystem:
         for class_name, percentage in self.percentages.items():
             count = round(total_parts * (percentage / 100))
             end_idx = min(current_idx + count, total_parts)
+            if class_name == 'C': end_idx = total_parts
             if current_idx < end_idx:
                 self.calculated_ranges[class_name] = {'min': valid_prices.iloc[end_idx - 1]}
             current_idx = end_idx
 
     def classify_part(self, unit_price):
         if pd.isna(unit_price): return 'Manual'
+        if not self.calculated_ranges: return 'Unclassified'
         if 'AA' in self.calculated_ranges and unit_price >= self.calculated_ranges['AA']['min']: return 'AA'
         if 'A' in self.calculated_ranges and unit_price >= self.calculated_ranges['A']['min']: return 'A'
         if 'B' in self.calculated_ranges and unit_price >= self.calculated_ranges['B']['min']: return 'B'
@@ -191,8 +192,7 @@ class ComprehensiveInventoryProcessor:
                     st.session_state.master_df = _merge_supplementary_df(st.session_state.master_df, modified_df[['part_id', internal_key]])
                     st.success(f"✅ Manual changes for {step_name} applied! Refreshing...")
                     time.sleep(2); st.rerun()
-                else:
-                    st.error(f"Upload failed. Ensure file has 'PARTNO' and '{pfep_name}' columns.")
+                else: st.error(f"Upload failed. Ensure file has 'PARTNO' and '{pfep_name}' columns.")
 
     def calculate_dynamic_consumption(self, qty_cols, multipliers):
         st.subheader("1. Daily & Net Consumption")
@@ -288,7 +288,6 @@ def create_formatted_excel_output(df, vehicle_configs):
         qty_veh_daily_cols.append(f"{config['name']}_Daily")
     final_df.rename(columns=rename_map, inplace=True)
     
-    # Construct final column list, starting with the base and inserting dynamic columns
     final_cols = BASE_TEMPLATE_COLUMNS[:]
     part_desc_index = final_cols.index('PART DESCRIPTION')
     final_cols[part_desc_index+1:part_desc_index+1] = qty_veh_cols + ['TOTAL']
@@ -351,11 +350,10 @@ def main():
         st.header("Step 3: Processing & Manual Review")
         processor = ComprehensiveInventoryProcessor(st.session_state.master_df)
         
-        # Define the sequence of processing stages
-        stages = ["start", "family", "size", "part", "norms", "wh_loc", "join"]
-        current_stage_index = stages.index(st.session_state.app_stage.split("_")[-1])
+        stages = ["start", "family", "size", "part", "norms", "wh_loc"]
+        stage_str = st.session_state.app_stage.split("_")[-1]
+        current_stage_index = stages.index(stage_str) if stage_str in stages else -1
         
-        # Execute all steps up to the current one
         processor.calculate_dynamic_consumption(st.session_state.qty_cols, [c['multiplier'] for c in st.session_state.vehicle_configs])
         if current_stage_index >= 1: processor.run_family_classification()
         if current_stage_index >= 2: processor.run_size_classification()
@@ -363,24 +361,25 @@ def main():
         if current_stage_index >= 4: processor.run_location_based_norms(st.session_state.pincode)
         if current_stage_index >= 5: processor.run_warehouse_location_assignment()
 
-        # Show the "Continue" button for the next stage
+        st.session_state.master_df = processor.data.copy()
+
         if current_stage_index < len(stages) - 1:
             next_stage_name = stages[current_stage_index + 1].replace("_", " ").title()
             if st.button(f"Continue to {next_stage_name}"):
                 st.session_state.app_stage = f"process_{stages[current_stage_index + 1]}"
                 st.rerun()
         else:
-            st.session_state.final_df = processor.data.copy()
-            st.session_state.app_stage = "join"
-            st.rerun()
+            st.markdown("---"); st.info("All processing steps are complete.")
+            if st.button("Continue to Final Join Step"):
+                st.session_state.app_stage = "join"; st.rerun()
     
     if st.session_state.app_stage == "join":
         st.header("Step 4: Join Additional Data (Optional)")
-        st.info("Upload a final file to merge additional data before generating the report. The file must contain a 'PARTNO' column.")
+        st.info("Upload a final file to merge additional data. The file must contain a 'PARTNO' column.")
         join_file = st.file_uploader("Upload Join File", type=['csv', 'xlsx'])
         
         if st.button("Generate Final Report"):
-            final_df = st.session_state.final_df.copy()
+            final_df = st.session_state.master_df.copy()
             if join_file:
                 with st.spinner("Merging final data..."):
                     join_df = read_uploaded_file(join_file)
@@ -389,8 +388,7 @@ def main():
                         final_df = _merge_supplementary_df(final_df, join_df)
                         st.success("✅ Final data successfully merged.")
             st.session_state.final_df_joined = final_df
-            st.session_state.app_stage = "download"
-            st.rerun()
+            st.session_state.app_stage = "download"; st.rerun()
 
     if st.session_state.app_stage == "download":
         st.header("Step 5: Download Final Report")
