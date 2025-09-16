@@ -358,7 +358,7 @@ def main():
         if current_stage_index >= 1: processor.run_family_classification()
         if current_stage_index >= 2: processor.run_size_classification()
         if current_stage_index >= 3: processor.run_part_classification()
-        if current_stage_index >= 4: processor.run_location_based_norms(st.session_state.pincode)
+        if current_state_index >= 4: processor.run_location_based_norms(st.session_state.pincode)
         if current_stage_index >= 5: processor.run_warehouse_location_assignment()
 
         st.session_state.master_df = processor.data.copy()
@@ -378,6 +378,9 @@ def main():
         st.info("Upload a final file to merge additional data. The file must contain a 'PARTNO' column.")
         join_file = st.file_uploader("Upload Join File", type=['csv', 'xlsx'])
         
+        # --- IMPORTANT ---
+        # You MUST click this button to proceed to the download step, 
+        # even if you do not upload a file.
         if st.button("Generate Final Report"):
             final_df = st.session_state.master_df.copy()
             if join_file:
