@@ -73,27 +73,22 @@ BASE_WAREHOUSE_MAPPING = {
     "Aluminium": "HRR", "ACP Sheet": "MEZ C-02(B)", "Handle": "HRR", "HATCH": "HRR", "HDF Board": "MRR(C-01)", "FRP": "CTR", "Others": "HRR"
 }
 
-# --- DISTANCE CALCULATION COMPONENTS (Unchanged, adapted for Streamlit caching) ---
-GEOCODING_CACHE = {}
+# --- DISTANCE CALCULATION COMPONENTS (Unchanged) ---
 GEOLOCATOR = Nominatim(user_agent="inventory_distance_calculator_streamlit_v2", timeout=10)
 
 @st.cache_data
 def get_lat_lon(pincode, country="India", city="", state="", retries=3, backoff_factor=2):
     pincode_str = str(pincode).strip().split('.')[0]
-    if not pincode_str.isdigit() or int(pincode_str) == 0:
-        return (None, None)
-    query_key = f"{pincode_str}|{country}|{city}|{state}"
+    if not pincode_str.isdigit() or int(pincode_str) == 0: return (None, None)
     query = f"{pincode_str}, {city}, {state}, {country}" if city and state else f"{pincode_str}, {country}"
     for attempt in range(retries):
         try:
             time.sleep(1)
             location = GEOLOCATOR.geocode(query)
-            if location:
-                return (location.latitude, location.longitude)
+            if location: return (location.latitude, location.longitude)
         except Exception as e:
             st.warning(f"Geocoding exception for '{pincode_str}': {e}")
-            if attempt < retries - 1:
-                time.sleep(backoff_factor * (attempt + 1))
+            if attempt < retries - 1: time.sleep(backoff_factor * (attempt + 1))
             continue
     return (None, None)
 
@@ -104,7 +99,7 @@ def get_distance_code(distance):
     elif distance <= 750: return 3
     else: return 4
 
-# --- 2. DATA LOADING AND CONSOLIDATION (ADAPTED FOR STREAMLIT) ---
+# --- 2. DATA LOADING AND CONSOLIDATION (Functions Corrected) ---
 
 def read_uploaded_file(uploaded_file):
     try:
@@ -145,7 +140,10 @@ def find_and_rename_columns(df, file_number=None):
                 found_keys.append(internal_key)
                 break
     df.rename(columns=rename_dict, inplace=True)
-    st.info(f"   Found and mapped columns: {found_keys}")
+    if found_keys:
+        st.info(f"   Found and mapped columns: {found_keys}")
+    else:
+        st.warning("   Could not automatically map any standard columns.")
     return df
 
 def process_and_diagnose_qty_columns(df):
@@ -161,10 +159,17 @@ def process_and_diagnose_qty_columns(df):
             df[col_name] = numeric_col.fillna(0)
     return df
 
+# MODIFIED FUNCTION
 def _consolidate_bom_list(bom_list):
-    if not bom_list: return None
-    master = bom_list[0].copy()
-    for i, df in enumerate(bom_list[1:], 2):
+    """Helper function to merge a list of BOM DataFrames, now more robust."""
+    # Filter out any dataframes that do not have the essential 'part_id' column
+    valid_boms = [df for df in bom_list if 'part_id' in df.columns]
+
+    if not valid_boms:
+        return None # Return None if no valid BOMs were found
+
+    master = valid_boms[0].copy()
+    for i, df in enumerate(valid_boms[1:], 2):
         master = pd.merge(master, df, on='part_id', how='outer', suffixes=('', f'_temp{i}'))
         overlap_cols = [c for c in df.columns if f"{c}_temp{i}" in master.columns]
         for col in overlap_cols:
@@ -172,6 +177,7 @@ def _consolidate_bom_list(bom_list):
             master[col] = master[col].fillna(master[temp_col])
             master.drop(columns=[temp_col], inplace=True)
     return master
+
 
 def _merge_supplementary_df(main_df, new_df):
     if 'part_id' not in new_df.columns: return main_df
@@ -187,24 +193,23 @@ def _merge_supplementary_df(main_df, new_df):
     main_df.update(new_df)
     return main_df.reset_index()
 
+# MODIFIED FUNCTION
 def load_and_consolidate_data(uploaded_files, daily_mult_1, daily_mult_2):
     pbom_dfs, mbom_dfs, part_attr_dfs, pkg_dfs = [], [], [], []
     vendor_master_df = None
 
     with st.spinner("Processing uploaded files..."):
-        # --- Process files based on the dictionary from the UI ---
+        # Process files as before...
         if 'vendor_master' in uploaded_files and uploaded_files['vendor_master']:
             st.write("Processing Vendor Master file...")
             df = read_uploaded_file(uploaded_files['vendor_master'])
-            if df is not None:
-                vendor_master_df = find_and_rename_columns(df)
+            if df is not None: vendor_master_df = find_and_rename_columns(df)
 
         if 'packaging' in uploaded_files and uploaded_files['packaging']:
             st.write("Processing Packaging Details file(s)...")
             for f in uploaded_files['packaging']:
                 df = read_uploaded_file(f)
-                if df is not None:
-                    pkg_dfs.append(find_and_rename_columns(df))
+                if df is not None: pkg_dfs.append(find_and_rename_columns(df))
 
         file_type_map = {"PBOM": pbom_dfs, "MBOM": mbom_dfs, "Part Attribute": part_attr_dfs}
         for key, df_list in file_type_map.items():
@@ -213,27 +218,31 @@ def load_and_consolidate_data(uploaded_files, daily_mult_1, daily_mult_2):
                  st.write(f"Processing {key} file(s)...")
                  for i, f in enumerate(uploaded_files[internal_key]):
                      df = read_uploaded_file(f)
-                     if df is not None:
-                         df_list.append(find_and_rename_columns(df, i + 1 if "BOM" in key else None))
-        
-        # --- Step 2: Consolidate BOMs ---
+                     if df is not None: df_list.append(find_and_rename_columns(df, i + 1 if "BOM" in key else None))
+
+        # --- Step 2: Consolidate BOMs with new checks ---
         st.subheader("BOM CONSOLIDATION")
         pbom_master = _consolidate_bom_list(pbom_dfs)
         mbom_master = _consolidate_bom_list(mbom_dfs)
-        if pbom_master is None and mbom_master is None:
-            st.error("No valid BOM data loaded. Cannot proceed.")
-            return None
         master_bom = _consolidate_bom_list([d for d in [pbom_master, mbom_master] if d is not None])
+
+        # --- THIS IS THE CRITICAL FIX ---
+        # Check if master_bom is valid before proceeding
+        if master_bom is None or master_bom.empty:
+            st.error("CRITICAL ERROR: Could not process BOM files. Please ensure at least one uploaded BOM file (PBOM or MBOM) contains a 'PARTNO' column.")
+            return None # Stop execution
+
+        # This line is now safe to run
         st.success(f"Consolidated BOM base has {master_bom['part_id'].nunique()} unique parts.")
 
-        # --- Step 3 & 4: Merge all supplementary data ---
+        # --- Step 3, 4, 5 proceed as before ---
         st.subheader("MERGING DATA")
         final_df = master_bom
         for df in part_attr_dfs + pkg_dfs:
             if df is not None and 'part_id' in df.columns:
                 final_df = _merge_supplementary_df(final_df, df)
                 st.info("✅ Supplementary part/packaging data merged.")
-            else: st.warning("⚠️ Skipping a file as it lacks 'PARTNO'.")
+            else: st.warning("⚠️ Skipping a supplementary file as it lacks 'PARTNO'.")
 
         if vendor_master_df is not None:
             if 'part_id' in vendor_master_df.columns:
@@ -243,7 +252,6 @@ def load_and_consolidate_data(uploaded_files, daily_mult_1, daily_mult_2):
             else: st.warning("⚠️ SKIPPED: The uploaded Vendor Master file does not contain a 'PARTNO' column.")
         else: st.info("No Vendor Master file was uploaded. Skipping.")
 
-        # --- Step 5: Final calculations ---
         final_df.drop_duplicates(subset=['part_id'], keep='first', inplace=True)
         final_df = process_and_diagnose_qty_columns(final_df)
         final_df['total_qty'] = final_df['qty_veh_1'] + final_df['qty_veh_2']
@@ -253,7 +261,9 @@ def load_and_consolidate_data(uploaded_files, daily_mult_1, daily_mult_2):
         st.success("Initial data consolidation and calculation complete!")
     return final_df
 
-# --- 3. PERCENTAGE-BASED PART CLASSIFICATION (Unchanged) ---
+# --- (The rest of the file: Classes and main function remain unchanged) ---
+
+# --- 3. PERCENTAGE-BASED PART CLASSIFICATION ---
 class PartClassificationSystem:
     def __init__(self):
         self.percentages = {
@@ -305,7 +315,7 @@ class PartClassificationSystem:
         if self.parts_data is None or not self.calculated_ranges: return None
         return self.parts_data[self.price_column].apply(self.classify_part)
 
-# --- 4. DATA PROCESSING CLASS (ADAPTED FOR STREAMLIT) ---
+# --- 4. DATA PROCESSING CLASS ---
 class ComprehensiveInventoryProcessor:
     def __init__(self, initial_data):
         self.data = initial_data.copy()
@@ -449,7 +459,7 @@ class ComprehensiveInventoryProcessor:
         st.success("✅ Automated warehouse location assignment complete.")
         self.manual_review_step('wh_loc', 'Warehouse Location')
 
-# --- 5. FINAL EXCEL REPORT GENERATION (ADAPTED FOR STREAMLIT) ---
+# --- 5. FINAL EXCEL REPORT GENERATION ---
 def create_formatted_excel_output(df):
     st.subheader("\n(6/6) Generating Formatted Excel Report")
     with st.spinner("Creating the final Excel report..."):
@@ -487,11 +497,10 @@ def create_formatted_excel_output(df):
     st.success(f"✅ Successfully created formatted Excel file!")
     return processed_data
 
-# --- 6. MAIN WORKFLOW (ADAPTED FOR STREAMLIT) ---
+# --- 6. MAIN WORKFLOW ---
 def main():
     st.title("🏭 Comprehensive Inventory & Supply Chain Analysis System")
 
-    # Initialize session state
     if 'processing_started' not in st.session_state:
         st.session_state.processing_started = False
     if 'master_df' not in st.session_state:
@@ -501,7 +510,6 @@ def main():
 
     uploaded_files = {}
 
-    # --- Step 1: File Uploads in Main Bar ---
     st.header("Step 1: Upload Data Files")
     st.info("Select 'Yes' to reveal the uploader for each file type. BOM files are mandatory.")
     
@@ -525,7 +533,6 @@ def main():
 
     st.markdown("---")
     
-    # --- Step 2: Production & Location Inputs ---
     st.header("Step 2: Enter Parameters")
     col1, col2, col3 = st.columns(3)
     with col1:
@@ -537,10 +544,8 @@ def main():
     
     st.markdown("---")
 
-    # --- Step 3: Start Analysis ---
     st.header("Step 3: Run Analysis")
     if st.button("🚀 Start Comprehensive Analysis"):
-        # The logic for single file uploads needs to handle the case where it's not a list
         has_pbom = 'pbom' in uploaded_files and uploaded_files['pbom']
         has_mbom = 'mbom' in uploaded_files and uploaded_files['mbom']
 
@@ -548,14 +553,13 @@ def main():
             st.error("You must upload at least one PBOM or MBOM file to start the analysis.")
         else:
             st.session_state.processing_started = True
-            st.session_state.final_report = None # Reset report on new run
+            st.session_state.final_report = None
             master_df = load_and_consolidate_data(uploaded_files, daily_mult_1, daily_mult_2)
             if master_df is not None:
                 st.session_state.master_df = master_df
             else:
                 st.session_state.processing_started = False
 
-    # --- Main Processing and Display Area ---
     if st.session_state.processing_started and st.session_state.master_df is not None:
         st.markdown("---")
         st.header("Processing Steps & Results")
@@ -572,12 +576,10 @@ def main():
 
         processor.run_warehouse_location_assignment()
 
-        # Generate and store the final report
         st.session_state.final_report = create_formatted_excel_output(processor.data)
         st.balloons()
         st.success("🎉 End-to-end process complete!")
 
-    # --- Download Button ---
     if st.session_state.final_report:
         st.markdown("---")
         st.header("Download Final Report")
