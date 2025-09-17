@@ -37,7 +37,7 @@ INTERNAL_TO_PFEP_NEW_COLS = { 'family': 'FAMILY', 'part_classification': 'PART C
 FAMILY_KEYWORD_MAPPING = { "ADAPTOR": ["ADAPTOR", "ADAPTER"], "Beading": ["BEADING"], "Electrical": ["BATTERY", "HVPDU", "ELECTRICAL", "INVERTER", "SENSOR", "DC", "COMPRESSOR", "TMCS", "COOLING", "BRAKE SIGNAL", "VCU", "VEHICLE CONTROL", "EVCC", "EBS ECU", "ECU", "CONTROL UNIT", "SIGNAL", "TRANSMITTER", "TRACTION", "HV", "KWH", "EBS", "SWITCH", "HORN"], "Electronics": ["DISPLAY", "APC", "SCREEN", "MICROPHONE", "CAMERA", "SPEAKER", "DASHBOARD", "ELECTRONICS", "SSD", "WOODWARD", "FDAS", "BDC", "GEN-2", "SENSOR", "BUZZER"], "Wheels": ["WHEEL", "TYRE", "TIRE", "RIM"], "Harness": ["HARNESS", "CABLE"], "Mechanical": ["PUMP", "SHAFT", "LINK", "GEAR", "ARM"], "Hardware": ["NUT", "BOLT", "SCREW", "WASHER", "RIVET", "M5", "M22", "M12", "CLAMP", "CLIP", "CABLE TIE", "DIN", "ZFP"], "Bracket": ["BRACKET", "BRKT", "BKT", "BRCKT"], "ASSY": ["ASSY"], "Sticker": ["STICKER", "LOGO", "EMBLEM"], "Suspension": ["SUSPENSION"], "Tank": ["TANK"], "Tape": ["TAPE", "REFLECTOR", "COLOUR"], "Tool Kit": ["TOOL KIT"], "Valve": ["VALVE"], "Hose": ["HOSE"], "Insulation": ["INSULATION"], "Interior & Exterior": ["ROLLER", "FIRE", "HAMMER"], "L-angle": ["L-ANGLE"], "Lamp": ["LAMP"], "Lock": ["LOCK"], "Lubricants": ["GREASE", "LUBRICANT"], "Medical": ["MEDICAL", "FIRST AID"], "Mirror": ["MIRROR", "ORVM"], "Motor": ["MOTOR"], "Mounting": ["MOUNT", "MTG", "MNTG", "MOUNTED"], "Oil": ["OIL"], "Panel": ["PANEL"], "Pillar": ["PILLAR"], "Pipe": ["PIPE", "TUBE", "SUCTION", "TUBULAR"], "Plate": ["PLATE"], "Plywood": ["FLOORING", "PLYWOOD", "EPGC"], "Profile": ["PROFILE", "ALUMINIUM"], "Rail": ["RAIL"], "Rubber": ["RUBBER", "GROMMET", "MOULDING"], "Seal": ["SEAL"], "Seat": ["SEAT"], "ABS Cover": ["ABS COVER"], "AC": ["AC"], "ACP Sheet": ["ACP SHEET"], "Aluminium": ["ALUMINIUM", "ALUMINUM"], "AXLE": ["AXLE"], "Bush": ["BUSH"], "Chassis": ["CHASSIS"], "Dome": ["DOME"], "Door": ["DOOR"], "Filter": ["FILTER"], "Flap": ["FLAP"], "FRP": ["FRP", "FACIA"], "Glass": ["GLASS", "WINDSHIELD", "WINDSHILED"], "Handle": ["HANDLE", "HAND", "PLASTIC"], "HATCH": ["HATCH"], "HDF Board": ["HDF"] }
 CATEGORY_PRIORITY_FAMILIES = {"ACP Sheet", "ADAPTOR", "Bracket", "Bush", "Flap", "Handle", "Beading", "Lubricants", "Panel", "Pillar", "Rail", "Seal", "Sticker", "Valve"}
 BASE_WAREHOUSE_MAPPING = { "ABS Cover": "HRR", "ADAPTOR": "MEZ B-01(A)", "Beading": "HRR", "AXLE": "FLOOR", "Bush": "HRR", "Chassis": "FLOOR", "Dome": "MEZ C-02(B)", "Door": "MRR(C-01)", "Electrical": "HRR", "Filter": "CRL", "Flap": "MEZ C-02", "Insulation": "MEZ C-02(B)", "Interior & Exterior": "HRR", "L-angle": "MEZ B-01(A)", "Lamp": "CRL", "Lock": "CRL", "Lubricants": "HRR", "Medical": "HRR", "Mirror": "HRR", "Motor": "HRR", "Mounting": "HRR", "Oil": "HRR", "Panel": "MEZ C-02", "Pillar": "MEZ C-02", "Pipe": "HRR", "Plate": "HRR", "Profile": "HRR", "Rail": "CTR(C-01)", "Seal": "HRR", "Seat": "MRR(C-01)", "Sticker": "MEZ B-01(A)", "Suspension": "MRR(C-01)", "Tank": "HRR", "Tool Kit": "HRR", "Valve": "CRL", "Wheels": "HRR", "Hardware": "MEZ B-02(A)", "Glass": "MRR(C-01)", "Harness": "HRR", "Hose": "HRR", "Aluminium": "HRR", "ACP Sheet": "MEZ C-02(B)", "Handle": "HRR", "HATCH": "HRR", "HDF Board": "MRR(C-01)", "FRP": "CTR", "Others": "HRR" }
-GEOLOCATOR = Nominatim(user_agent="inventory_distance_calculator_streamlit_v6", timeout=10)
+GEOLOCATOR = Nominatim(user_agent="inventory_distance_calculator_streamlit_v7", timeout=10)
 @st.cache_data
 def get_lat_lon(pincode, country="India", city="", state="", retries=3, backoff_factor=2):
     pincode_str = str(pincode).strip().split('.')[0]
@@ -87,24 +87,15 @@ def find_and_rename_columns(df):
     else: st.warning("   Could not automatically map any standard columns.")
     return df
 def _consolidate_bom_list(bom_list):
-    valid_boms = [df for df in bom_list if 'part_id' in df.columns]
+    valid_boms = [df for df in bom_list if df is not None and 'part_id' in df.columns]
     if not valid_boms: return None
-    master = valid_boms[0].copy()
-    temp_qty_cols_in_master = {c for c in master.columns if 'qty_veh_temp_' in c}
-    for df in valid_boms[1:]:
-        temp_qty_cols_in_df = {c for c in df.columns if 'qty_veh_temp_' in c}
-        master = pd.merge(master, df, on='part_id', how='outer', suffixes=('_master', ''))
-        overlap_cols = [c for c in df.columns if f"{c}_master" in master.columns and c != 'part_id' and 'qty_veh_temp' not in c]
-        for col in overlap_cols:
-            master[col] = master[col].fillna(master[f"{col}_master"])
-            master.drop(columns=[f"{col}_master"], inplace=True)
-        all_qty_cols = temp_qty_cols_in_master.union(temp_qty_cols_in_df)
-        for col in all_qty_cols:
-            master_col_name = f"{col}_master"
-            if master_col_name in master.columns:
-                master[col] = master[col].fillna(master[master_col_name])
-                master.drop(columns=[master_col_name], inplace=True)
-        temp_qty_cols_in_master = all_qty_cols
+    
+    # Use concat for a more robust merge, especially with differing columns
+    master = pd.concat(valid_boms, ignore_index=True)
+    
+    # Consolidate data by taking the first non-null value for each part_id
+    # This is more efficient than repeated merges
+    master = master.groupby('part_id').first().reset_index()
     return master
 def _merge_supplementary_df(main_df, new_df):
     if 'part_id' not in new_df.columns: return main_df
@@ -114,50 +105,59 @@ def _merge_supplementary_df(main_df, new_df):
         return main_df
     new_df.drop_duplicates(subset=['part_id'], keep='first', inplace=True)
     new_df = new_df.set_index('part_id')
-    update_cols = new_df.columns.difference(main_df.columns)
-    main_df = main_df.join(new_df[update_cols])
+    
+    # Update existing columns and add new ones
     main_df.update(new_df)
+    new_cols = new_df.columns.difference(main_df.columns)
+    main_df = main_df.join(new_df[new_cols])
+    
     return main_df.reset_index()
-def initial_data_load_and_detect(uploaded_files):
-    pbom_dfs, mbom_dfs, part_attr_dfs, pkg_dfs = [], [], [], []
-    vendor_master_df = None
-    with st.spinner("Processing uploaded files and detecting vehicle columns..."):
-        if 'vendor_master' in uploaded_files and uploaded_files['vendor_master']:
-            df = read_uploaded_file(uploaded_files['vendor_master'])
-            if df is not None: vendor_master_df = find_and_rename_columns(df)
-        if 'packaging' in uploaded_files and uploaded_files['packaging']:
-            for f in uploaded_files['packaging']:
+
+# This function is now simplified to just load and preprocess
+def load_all_files(uploaded_files):
+    file_types = {
+        "pbom": [], "mbom": [], "part_attribute": [], 
+        "packaging": [], "vendor_master": []
+    }
+    
+    with st.spinner("Processing uploaded files..."):
+        for key, files in uploaded_files.items():
+            if not files: continue
+            # Handle both single and multiple file uploads
+            file_list = files if isinstance(files, list) else [files]
+            for f in file_list:
                 df = read_uploaded_file(f)
-                if df is not None: pkg_dfs.append(find_and_rename_columns(df))
-        file_type_map = {"PBOM": pbom_dfs, "MBOM": mbom_dfs, "Part Attribute": part_attr_dfs}
-        for key, df_list in file_type_map.items():
-            internal_key = key.lower().replace(" ", "_")
-            if internal_key in uploaded_files and uploaded_files[internal_key]:
-                 for f in uploaded_files[internal_key]:
-                     df = read_uploaded_file(f)
-                     if df is not None: df_list.append(find_and_rename_columns(df))
-        st.subheader("BOM CONSOLIDATION")
-        master_bom = _consolidate_bom_list(pbom_dfs + mbom_dfs)
-        if master_bom is None or master_bom.empty:
-            st.error("CRITICAL ERROR: Could not process BOM files. Ensure at least one uploaded BOM file contains a 'PARTNO' column.")
-            return None, None
-        st.success(f"Consolidated BOM base has {master_bom['part_id'].nunique()} unique parts.")
-        final_df = master_bom
-        for df in part_attr_dfs + pkg_dfs + ([vendor_master_df] if vendor_master_df is not None else []):
-            if df is not None and 'part_id' in df.columns:
-                final_df = _merge_supplementary_df(final_df, df)
+                if df is not None:
+                    # Append the processed dataframe to the correct list
+                    file_types[key].append(find_and_rename_columns(df))
+    return file_types
+
+def finalize_master_df(base_bom_df, supplementary_dfs):
+    with st.spinner("Consolidating final dataset..."):
+        final_df = base_bom_df
+        for df_list in supplementary_dfs:
+            for df in df_list:
+                if df is not None and 'part_id' in df.columns:
+                    final_df = _merge_supplementary_df(final_df, df)
+        
         final_df.drop_duplicates(subset=['part_id'], keep='first', inplace=True)
+        
         detected_qty_cols = sorted([col for col in final_df.columns if 'qty_veh_temp_' in col])
         rename_map = {old_name: f"qty_veh_{i}" for i, old_name in enumerate(detected_qty_cols)}
         final_df.rename(columns=rename_map, inplace=True)
         final_qty_cols = sorted(rename_map.values())
+        
         for col in final_qty_cols:
             numeric_col = pd.to_numeric(final_df[col], errors='coerce')
             invalid_count = numeric_col.isna().sum()
             if invalid_count > 0: st.warning(f"Found {invalid_count} non-numeric values in a quantity column. Setting them to 0.")
             final_df[col] = numeric_col.fillna(0)
-        st.success(f"Detected {len(final_qty_cols)} unique 'Quantity per Vehicle' columns across all files.")
+            
+        st.success(f"Consolidated base has {final_df['part_id'].nunique()} unique parts.")
+        st.success(f"Detected {len(final_qty_cols)} unique 'Quantity per Vehicle' columns.")
+        
         return final_df, final_qty_cols
+
 class PartClassificationSystem:
     def __init__(self):
         self.percentages = {'C': {'target': 60, 'tolerance': 5}, 'B': {'target': 25, 'tolerance': 2}, 'A': {'target': 12, 'tolerance': 2}, 'AA': {'target': 3, 'tolerance': 1}}
@@ -372,7 +372,7 @@ class ComprehensiveInventoryProcessor:
         }
         # Use a regex replacement to handle variations like 'MEZ B-01(A)'
         for short, long in loc_expansion_map.items():
-            self.data['wh_loc'] = self.data['wh_loc'].str.replace(short, long, regex=False)
+            self.data['wh_loc'] = self.data['wh_loc'].astype(str).str.replace(short, long, regex=False)
 
         st.success("✅ Automated warehouse location assignment complete.")
 
@@ -403,12 +403,18 @@ def create_formatted_excel_output(df, vehicle_configs):
 
     # Construct the final dynamic column template by re-using BASE_TEMPLATE_COLUMNS
     final_template = []
-    for col in BASE_TEMPLATE_COLUMNS:
-        if "# Placeholder for dynamic Qty/Veh cols" in col:
+    # This logic replaces the placeholder comments with the actual dynamic columns
+    base_col_iter = iter(BASE_TEMPLATE_COLUMNS)
+    for col in base_col_iter:
+        if col == 'PART DESCRIPTION':
+            final_template.append(col)
             final_template.extend(qty_veh_cols)
             final_template.append('TOTAL')
-        elif "# Placeholder for dynamic Qty/Veh_Daily cols" in col:
+            next(base_col_iter, None) # Skip placeholder
+        elif col == 'FAMILY':
+            final_template.append(col)
             final_template.extend(qty_veh_daily_cols)
+            next(base_col_iter, None) # Skip placeholder
         else:
             final_template.append(col)
 
@@ -462,10 +468,8 @@ def render_review_step(step_name, internal_key, next_stage):
     st.header(f"Manual Review: {step_name}")
     st.info(f"The automated {step_name.lower()} is complete. You can now review the results, download them, make changes, and upload them to override the automated classification.")
     
-    # Get the user-facing column name from all available maps
     pfep_name = INTERNAL_TO_PFEP_NEW_COLS.get(internal_key, PFEP_COLUMN_MAP.get(internal_key, internal_key))
     
-    # For packaging, we might want to review the source column as well
     review_cols = ['part_id', 'description']
     if internal_key == 'one_way_returnable':
         review_cols.append('primary_pack_type')
@@ -474,11 +478,8 @@ def render_review_step(step_name, internal_key, next_stage):
     existing_cols = [c for c in review_cols if c in st.session_state.master_df.columns]
     review_df = st.session_state.master_df[existing_cols].copy()
     
-    # Rename all columns for user-friendliness
     display_rename_map = {
-        internal_key: pfep_name, 
-        'part_id': 'PARTNO', 
-        'description': 'PART DESCRIPTION',
+        internal_key: pfep_name, 'part_id': 'PARTNO', 'description': 'PART DESCRIPTION',
         'primary_pack_type': 'PRIMARY PACK TYPE'
     }
     review_df.rename(columns=display_rename_map, inplace=True)
@@ -488,18 +489,15 @@ def render_review_step(step_name, internal_key, next_stage):
     csv_data = review_df.to_csv(index=False).encode('utf-8')
     st.download_button(
         label=f"📥 Download {step_name} Data for Review",
-        data=csv_data,
-        file_name=f"manual_review_{internal_key}.csv",
-        mime='text/csv',
+        data=csv_data, file_name=f"manual_review_{internal_key}.csv", mime='text/csv',
     )
     
     st.markdown("---")
     uploaded_file = st.file_uploader(f"Upload Modified {step_name} File Here", type=['csv', 'xlsx'], key=f"upload_{internal_key}")
     
     col1, col2 = st.columns(2)
-    
     with col1:
-        if st.button(f"Apply Changes & Continue to Next Step", disabled=not uploaded_file, type="primary"):
+        if st.button(f"Apply Changes & Continue", disabled=not uploaded_file, type="primary"):
             modified_df = read_uploaded_file(uploaded_file)
             if modified_df is not None and 'PARTNO' in modified_df.columns and pfep_name in modified_df.columns:
                 modified_df.rename(columns={pfep_name: internal_key, 'PARTNO': 'part_id'}, inplace=True)
@@ -509,35 +507,28 @@ def render_review_step(step_name, internal_key, next_stage):
                 st.rerun()
             else:
                 st.error(f"Upload failed or the file is invalid. It must contain 'PARTNO' and '{pfep_name}' columns.")
-                
     with col2:
-        if st.button(f"Skip & Continue with Automated Results"):
+        if st.button(f"Skip & Continue"):
             st.session_state.app_stage = next_stage
             st.rerun()
-
 
 # --- 6. MAIN WORKFLOW ---
 def main():
     st.title("🏭 Dynamic Inventory & Supply Chain Analysis System")
 
     # Initialize session state variables
-    if 'app_stage' not in st.session_state: st.session_state.app_stage = "upload"
-    if 'master_df' not in st.session_state: st.session_state.master_df = None
-    if 'qty_cols' not in st.session_state: st.session_state.qty_cols = []
-    if 'final_report' not in st.session_state: st.session_state.final_report = None
-    if 'processor' not in st.session_state: st.session_state.processor = None
+    for key in ['app_stage', 'master_df', 'qty_cols', 'final_report', 'processor', 'all_files']:
+        if key not in st.session_state:
+            st.session_state[key] = None if key != 'app_stage' else 'upload'
 
     # --- STAGE: UPLOAD ---
     if st.session_state.app_stage == "upload":
         st.header("Step 1: Upload Data Files")
         st.info("Upload all relevant files. The tool will automatically find all 'Quantity per Vehicle' columns.")
         uploaded_files = {}
-        # Reordered file options as requested
         file_options = [ 
-            ("PBOM", "pbom", True), 
-            ("MBOM", "mbom", True), 
-            ("Part Attribute", "part_attribute", True),
-            ("Vendor Master", "vendor_master", False), 
+            ("PBOM", "pbom", True), ("MBOM", "mbom", True), 
+            ("Part Attribute", "part_attribute", True), ("Vendor Master", "vendor_master", False), 
             ("Packaging Details", "packaging", True)
         ]
         for display_name, key_name, is_multiple in file_options:
@@ -545,27 +536,89 @@ def main():
                 uploaded_files[key_name] = st.file_uploader(f"Upload", type=['csv', 'xlsx'], accept_multiple_files=is_multiple, key=f"upload_{key_name}", label_visibility="collapsed")
         pincode = st.text_input("Enter your location's pincode for distance calculations", value="411001")
 
-        if st.button("Detect Vehicle Columns & Consolidate Files"):
-            has_bom = ('pbom' in uploaded_files and uploaded_files['pbom']) or \
-                      ('mbom' in uploaded_files and uploaded_files['mbom'])
+        if st.button("Process Uploaded Files"):
+            # Check for at least one BOM file
+            has_bom = (uploaded_files['pbom']) or (uploaded_files['mbom'])
             if not has_bom:
                 st.error("You must upload at least one PBOM or MBOM file.")
             else:
-                master_df, qty_cols = initial_data_load_and_detect(uploaded_files)
-                if master_df is not None and qty_cols:
-                    st.session_state.master_df = master_df
-                    st.session_state.qty_cols = qty_cols
-                    st.session_state.pincode = pincode
-                    st.session_state.app_stage = "configure"
-                    st.rerun()
-                elif master_df is not None:
-                    st.warning("Data was loaded, but no 'Quantity per Vehicle' columns were detected. Please check your files.")
-    
+                all_files = load_all_files(uploaded_files)
+                st.session_state.all_files = all_files
+                st.session_state.pincode = pincode
+
+                # Conditional Step: If both PBOM and MBOM are uploaded, go to selection screen
+                if all_files['pbom'] and all_files['mbom']:
+                    st.session_state.app_stage = "bom_selection"
+                else: # Otherwise, consolidate immediately and proceed
+                    bom_dfs = all_files['pbom'] + all_files['mbom']
+                    base_bom = _consolidate_bom_list(bom_dfs)
+                    
+                    if base_bom is not None:
+                        supplementary_dfs = [all_files['part_attribute'], all_files['vendor_master'], all_files['packaging']]
+                        master_df, qty_cols = finalize_master_df(base_bom, supplementary_dfs)
+                        st.session_state.master_df = master_df
+                        st.session_state.qty_cols = qty_cols
+                        st.session_state.app_stage = "configure"
+                    else:
+                        st.error("Failed to consolidate any BOM data. Please check your files.")
+                st.rerun()
+
+    # --- NEW STAGE: BOM SELECTION ---
+    if st.session_state.app_stage == "bom_selection":
+        st.header("Step 1.5: BOM Base Selection")
+        st.info("You have uploaded both PBOM and MBOM files. Please choose which dataset to use as the base for the PFEP analysis.")
+
+        with st.spinner("Analyzing differences between PBOM and MBOM..."):
+            all_files = st.session_state.all_files
+            master_pbom = _consolidate_bom_list(all_files['pbom'])
+            master_mbom = _consolidate_bom_list(all_files['mbom'])
+            
+            pbom_parts = set(master_pbom['part_id'])
+            mbom_parts = set(master_mbom['part_id'])
+
+            unique_to_pbom = pbom_parts - mbom_parts
+            unique_to_mbom = mbom_parts - pbom_parts
+            common_parts = pbom_parts.intersection(mbom_parts)
+        
+        st.subheader("BOM Comparison")
+        col1, col2, col3 = st.columns(3)
+        col1.metric("Parts Unique to PBOM", len(unique_to_pbom))
+        col2.metric("Parts Unique to MBOM", len(unique_to_mbom))
+        col3.metric("Parts Common to Both", len(common_parts))
+
+        bom_choice = st.radio(
+            "Select the BOM base for analysis:",
+            ('Use PBOM as base', 'Use MBOM as base', 'Combine both PBOM and MBOM'),
+            horizontal=True
+        )
+
+        if st.button("Confirm Selection and Continue"):
+            base_bom_df = None
+            if bom_choice == 'Use PBOM as base':
+                base_bom_df = master_pbom
+            elif bom_choice == 'Use MBOM as base':
+                base_bom_df = master_mbom
+            elif bom_choice == 'Combine both PBOM and MBOM':
+                base_bom_df = _consolidate_bom_list([master_pbom, master_mbom])
+            
+            if base_bom_df is not None:
+                supplementary_dfs = [all_files['part_attribute'], all_files['vendor_master'], all_files['packaging']]
+                master_df, qty_cols = finalize_master_df(base_bom_df, supplementary_dfs)
+                st.session_state.master_df = master_df
+                st.session_state.qty_cols = qty_cols
+                st.session_state.app_stage = "configure"
+                st.rerun()
+
     # --- STAGE: CONFIGURE ---
     if st.session_state.app_stage == "configure":
         st.markdown("---")
         st.header("Step 2: Configure Vehicle Types")
-        st.info("We detected the following quantity columns. Please provide a descriptive name and daily production for each.")
+        if not st.session_state.qty_cols:
+            st.warning("No 'Quantity per Vehicle' columns were detected. You can proceed, but consumption calculations will be zero.")
+            st.session_state.qty_cols = [] # Ensure it's a list
+        else:
+            st.info("We detected the following quantity columns. Please provide a descriptive name and daily production for each.")
+
         vehicle_configs = []
         for i, col_name in enumerate(st.session_state.qty_cols):
             st.markdown(f"**Detected Column #{i+1}**")
@@ -574,17 +627,16 @@ def main():
             multiplier = cols[1].number_input("Daily Production Quantity", min_value=0.0, value=1.0, step=0.1, key=f"mult_{i}")
             vehicle_configs.append({"name": name, "multiplier": multiplier})
         
-        if st.button("🚀 Run Full Analysis with Manual Review Steps"):
+        if st.button("🚀 Run Full Analysis"):
             st.session_state.vehicle_configs = vehicle_configs
-            # Initialize the processor and run the first calculation
             processor = ComprehensiveInventoryProcessor(st.session_state.master_df)
             final_df = processor.calculate_dynamic_consumption( st.session_state.qty_cols, [c['multiplier'] for c in vehicle_configs] )
             st.session_state.master_df = final_df
             st.session_state.processor = processor
-            st.session_state.app_stage = "process_family" # Move to the first processing step
+            st.session_state.app_stage = "process_family"
             st.rerun()
 
-    # Define the processing and review sequence
+    # --- PROCESSING AND REVIEW STAGES ---
     processing_steps = [
         {"process_stage": "process_family", "review_stage": "review_family", "method": "run_family_classification", "key": "family", "name": "Family Classification"},
         {"process_stage": "process_size", "review_stage": "review_size", "method": "run_size_classification", "key": "size_classification", "name": "Size Classification"},
@@ -593,7 +645,6 @@ def main():
         {"process_stage": "process_norms", "review_stage": "review_norms", "method": "run_location_based_norms", "key": "inventory_classification", "name": "Inventory Norms"},
         {"process_stage": "process_wh", "review_stage": "review_wh", "method": "run_warehouse_location_assignment", "key": "wh_loc", "name": "Warehouse Location"},
     ]
-
     for i, step in enumerate(processing_steps):
         next_stage = processing_steps[i+1]['process_stage'] if i + 1 < len(processing_steps) else "generate_report"
         
@@ -601,7 +652,6 @@ def main():
             st.header(f"Step 3: Automated Processing")
             with st.spinner(f"Running {step['name']}..."):
                 processor = st.session_state.processor
-                # Handle methods that require arguments
                 if step['method'] == 'run_location_based_norms':
                     getattr(processor, step['method'])(st.session_state.pincode)
                 else:
