@@ -29,12 +29,12 @@ BASE_TEMPLATE_COLUMNS = [
     'H-MM_Supply', 'Volume_Supply', 'QTY/CONTAINER -LS -9M', 'QTY/CONTAINER -LS-12M', 'STORAGE LINE SIDE',
     'L-MM_Line', 'W-MM_Line', 'H-MM_Line', 'Volume_Line', 'CONTAINER / RACK','NO OF TRIPS/DAY', 'INVENTORY LINE SIDE'
 ]
-PFEP_COLUMN_MAP = { 'part_id': 'PARTNO', 'description': 'PART DESCRIPTION', 'net_daily_consumption': 'NET', 'unit_price': 'UNIT PRICE', 'vendor_code': 'VENDOR CODE', 'vendor_name': 'VENDOR NAME', 'city': 'CITY', 'state': 'STATE', 'country': 'COUNTRY', 'pincode': 'PINCODE', 'length': 'L-MM_Size', 'width': 'W-MM_Size', 'height': 'H-MM_Size', 'qty_per_pack': 'QTY/PACK_Sec', 'packing_factor': 'PACKING FACTOR (PF)', 'primary_packaging_factor': 'PRIMARY PACKING FACTOR', 'qty_per_pack_prim': 'QTY/PACK_Prim', 'one_way_returnable': 'ONE WAY/ RETURNABLE', 'primary_pack_type': 'PRIMARY PACK TYPE'}
+PFEP_COLUMN_MAP = { 'part_id': 'PARTNO', 'description': 'PART DESCRIPTION', 'net_daily_consumption': 'NET', 'unit_price': 'UNIT PRICE', 'vendor_code': 'VENDOR CODE', 'vendor_name': 'VENDOR NAME', 'city': 'CITY', 'state': 'STATE', 'country': 'COUNTRY', 'pincode': 'PINCODE', 'length': 'L-MM_Size', 'width': 'W-MM_Size', 'height': 'H-MM_Size', 'qty_per_pack': 'QTY/PACK_Sec', 'packing_factor': 'PACKING FACTOR (PF)', 'primary_packaging_factor': 'PRIMARY PACKING FACTOR', 'qty_per_pack_prim': 'QTY/PACK_Prim', 'one_way_returnable': 'ONE WAY/ RETURNABLE', 'primary_pack_type': 'PRIMARY PACK TYPE', 'supply_condition': 'SUPPLY CONDITION'}
 INTERNAL_TO_PFEP_NEW_COLS = { 'family': 'FAMILY', 'part_classification': 'PART CLASSIFICATION', 'volume_m3': 'Volume (m^3)', 'size_classification': 'SIZE CLASSIFICATION', 'wh_loc': 'WH LOC', 'inventory_classification': 'INVENTORY CLASSIFICATION', 'prim_pack_lifespan': 'PRIM. PACK LIFESPAN', 'sec_pack_lifespan': 'SEC. PACK LIFESPAN'}
 FAMILY_KEYWORD_MAPPING = { "ADAPTOR": ["ADAPTOR", "ADAPTER"], "Beading": ["BEADING"], "Electrical": ["BATTERY", "HVPDU", "ELECTRICAL", "INVERTER", "SENSOR", "DC", "COMPRESSOR", "TMCS", "COOLING", "BRAKE SIGNAL", "VCU", "VEHICLE CONTROL", "EVCC", "EBS ECU", "ECU", "CONTROL UNIT", "SIGNAL", "TRANSMITTER", "TRACTION", "HV", "KWH", "EBS", "SWITCH", "HORN"], "Electronics": ["DISPLAY", "APC", "SCREEN", "MICROPHONE", "CAMERA", "SPEAKER", "DASHBOARD", "ELECTRONICS", "SSD", "WOODWARD", "FDAS", "BDC", "GEN-2", "SENSOR", "BUZZER"], "Wheels": ["WHEEL", "TYRE", "TIRE", "RIM"], "Harness": ["HARNESS", "CABLE"], "Mechanical": ["PUMP", "SHAFT", "LINK", "GEAR", "ARM"], "Hardware": ["NUT", "BOLT", "SCREW", "WASHER", "RIVET", "M5", "M22", "M12", "CLAMP", "CLIP", "CABLE TIE", "DIN", "ZFP"], "Bracket": ["BRACKET", "BRKT", "BKT", "BRCKT"], "ASSY": ["ASSY"], "Sticker": ["STICKER", "LOGO", "EMBLEM"], "Suspension": ["SUSPENSION"], "Tank": ["TANK"], "Tape": ["TAPE", "REFLECTOR", "COLOUR"], "Tool Kit": ["TOOL KIT"], "Valve": ["VALVE"], "Hose": ["HOSE"], "Insulation": ["INSULATION"], "Interior & Exterior": ["ROLLER", "FIRE", "HAMMER"], "L-angle": ["L-ANGLE"], "Lamp": ["LAMP"], "Lock": ["LOCK"], "Lubricants": ["GREASE", "LUBRICANT"], "Medical": ["MEDICAL", "FIRST AID"], "Mirror": ["MIRROR", "ORVM"], "Motor": ["MOTOR"], "Mounting": ["MOUNT", "MTG", "MNTG", "MOUNTED"], "Oil": ["OIL"], "Panel": ["PANEL"], "Pillar": ["PILLAR"], "Pipe": ["PIPE", "TUBE", "SUCTION", "TUBULAR"], "Plate": ["PLATE"], "Plywood": ["FLOORING", "PLYWOOD", "EPGC"], "Profile": ["PROFILE", "ALUMINIUM"], "Rail": ["RAIL"], "Rubber": ["RUBBER", "GROMMET", "MOULDING"], "Seal": ["SEAL"], "Seat": ["SEAT"], "ABS Cover": ["ABS COVER"], "AC": ["AC"], "ACP Sheet": ["ACP SHEET"], "Aluminium": ["ALUMINIUM", "ALUMINUM"], "AXLE": ["AXLE"], "Bush": ["BUSH"], "Chassis": ["CHASSIS"], "Dome": ["DOME"], "Door": ["DOOR"], "Filter": ["FILTER"], "Flap": ["FLAP"], "FRP": ["FRP", "FACIA"], "Glass": ["GLASS", "WINDSHIELD", "WINDSHILED"], "Handle": ["HANDLE", "HAND", "PLASTIC"], "HATCH": ["HATCH"], "HDF Board": ["HDF"] }
 CATEGORY_PRIORITY_FAMILIES = {"ACP Sheet", "ADAPTOR", "Bracket", "Bush", "Flap", "Handle", "Beading", "Lubricants", "Panel", "Pillar", "Rail", "Seal", "Sticker", "Valve"}
 BASE_WAREHOUSE_MAPPING = { "ABS Cover": "HRR", "ADAPTOR": "MEZ B-01(A)", "Beading": "HRR", "AXLE": "FLOOR", "Bush": "HRR", "Chassis": "FLOOR", "Dome": "MEZ C-02(B)", "Door": "MRR(C-01)", "Electrical": "HRR", "Filter": "CRL", "Flap": "MEZ C-02", "Insulation": "MEZ C-02(B)", "Interior & Exterior": "HRR", "L-angle": "MEZ B-01(A)", "Lamp": "CRL", "Lock": "CRL", "Lubricants": "HRR", "Medical": "HRR", "Mirror": "HRR", "Motor": "HRR", "Mounting": "HRR", "Oil": "HRR", "Panel": "MEZ C-02", "Pillar": "MEZ C-02", "Pipe": "HRR", "Plate": "HRR", "Profile": "HRR", "Rail": "CTR(C-01)", "Seal": "HRR", "Seat": "MRR(C-01)", "Sticker": "MEZ B-01(A)", "Suspension": "MRR(C-01)", "Tank": "HRR", "Tool Kit": "HRR", "Valve": "CRL", "Wheels": "HRR", "Hardware": "MEZ B-02(A)", "Glass": "MRR(C-01)", "Harness": "HRR", "Hose": "HRR", "Aluminium": "HRR", "ACP Sheet": "MEZ C-02(B)", "Handle": "HRR", "HATCH": "HRR", "HDF Board": "MRR(C-01)", "FRP": "CTR", "Others": "HRR" }
-GEOLOCATOR = Nominatim(user_agent="inventory_distance_calculator_streamlit_v8", timeout=10)
+GEOLOCATOR = Nominatim(user_agent="inventory_distance_calculator_streamlit_v9", timeout=10)
 
 # --- 2. CORE DATA PROCESSING FUNCTIONS ---
 @st.cache_data
@@ -106,6 +106,10 @@ def _consolidate_bom_list(bom_list):
     master[qty_cols] = master[qty_cols].fillna(0)
     master = master.groupby('part_id').agg(agg_dict).reset_index()
     
+    # NEW LOGIC: Revert placeholder 0s back to NaN for accurate empty cell representation
+    for col in qty_cols:
+        master[col] = master[col].replace(0, np.nan)
+        
     return master
 
 def _merge_supplementary_df(main_df, new_df):
@@ -133,7 +137,18 @@ def load_all_files(uploaded_files):
             for f in file_list:
                 df = read_uploaded_file(f)
                 if df is not None:
-                    file_types[key].append(find_and_rename_columns(df))
+                    processed_df = find_and_rename_columns(df)
+                    
+                    # NEW LOGIC: Filter out "Inhouse" parts from MBOM files
+                    if key == 'mbom' and 'supply_condition' in processed_df.columns:
+                        initial_count = len(processed_df)
+                        # Use ~ to invert the boolean mask. Keep rows that are NOT 'inhouse'.
+                        processed_df = processed_df[~processed_df['supply_condition'].str.contains('inhouse', case=False, na=False)]
+                        removed_count = initial_count - len(processed_df)
+                        if removed_count > 0:
+                            st.info(f"   Removed {removed_count} parts from an MBOM file marked as 'Inhouse'.")
+
+                    file_types[key].append(processed_df)
     return file_types
 
 def finalize_master_df(base_bom_df, supplementary_dfs):
@@ -152,8 +167,8 @@ def finalize_master_df(base_bom_df, supplementary_dfs):
         final_qty_cols = sorted(rename_map.values())
         
         for col in final_qty_cols:
-            numeric_col = pd.to_numeric(final_df[col], errors='coerce').fillna(0)
-            final_df[col] = numeric_col
+            # Convert to numeric, coercing errors to NaN, then let downstream functions handle NaN
+            final_df[col] = pd.to_numeric(final_df[col], errors='coerce')
             
         st.success(f"Consolidated base has {final_df['part_id'].nunique()} unique parts.")
         st.success(f"Detected {len(final_qty_cols)} unique 'Quantity per Vehicle' columns.")
@@ -210,10 +225,11 @@ class ComprehensiveInventoryProcessor:
         st.subheader("Calculating Daily & Net Consumption")
         daily_cols = []
         for col in qty_cols:
-            if col not in self.data.columns: self.data[col] = 0
+            if col not in self.data.columns: self.data[col] = np.nan # Use NaN for missing
         
         for i, col in enumerate(qty_cols):
             daily_col_name = f"{col}_daily"
+            # Multiplication with NaN results in NaN, which is fine. Sum will treat NaN as 0.
             self.data[daily_col_name] = self.data[col] * multipliers[i]
             daily_cols.append(daily_col_name)
 
@@ -243,7 +259,9 @@ class ComprehensiveInventoryProcessor:
                        for kw in kws for pos in (find_pos(kw),) if pos != -1)
             
             try:
-                return min(matches, key=lambda x: x[0])[1]
+                # Need to handle the case where the generator might be empty
+                first_match = min(matches, key=lambda x: x[0])
+                return first_match[1]
             except ValueError:
                 return 'Others'
 
@@ -254,7 +272,7 @@ class ComprehensiveInventoryProcessor:
         st.subheader("(B) Size Classification")
         size_cols = ['length', 'width', 'height']
         if not all(k in self.data.columns for k in size_cols):
-            self.data['volume_m3'], self.data['size_classification'] = None, 'Manual'
+            self.data['volume_m3'], self.data['size_classification'] = np.nan, 'Manual'
             return
         for col in size_cols: self.data[col] = pd.to_numeric(self.data[col], errors='coerce')
         self.data['volume_m3'] = (self.data['length'] * self.data['width'] * self.data['height']) / 1_000_000_000
@@ -314,7 +332,7 @@ class ComprehensiveInventoryProcessor:
         with st.spinner("Calculating distances to vendors..."):
             def calculate_distance(row):
                 vendor_coords = get_lat_lon(row.get('pincode'), city=str(row.get('city', '')), state=str(row.get('state', '')))
-                return geodesic(current_coords, vendor_coords).km if vendor_coords[0] is not None else None
+                return geodesic(current_coords, vendor_coords).km if vendor_coords[0] is not None else np.nan
             self.data['distance_km'] = self.data.apply(calculate_distance, axis=1)
         self.data['DISTANCE CODE'] = self.data['distance_km'].apply(get_distance_code)
         def get_inv_class(p, d):
@@ -362,9 +380,6 @@ class ComprehensiveInventoryProcessor:
         st.success("✅ Automated warehouse location assignment complete.")
 
 # --- 4. UI AND REPORTING FUNCTIONS ---
-# ##########################################################################
-# ### THIS IS THE REVISED FUNCTION WITH DYNAMIC HEADER LOGIC ###
-# ##########################################################################
 def create_formatted_excel_output(df, vehicle_configs):
     st.subheader("(G) Generating Formatted Excel Report")
     final_df = df.copy()
@@ -372,35 +387,26 @@ def create_formatted_excel_output(df, vehicle_configs):
     
     qty_veh_cols, qty_veh_daily_cols = [], []
     for i, config in enumerate(vehicle_configs):
-        internal_qty_col = f"qty_veh_{i}"
-        internal_daily_col = f"qty_veh_{i}_daily"
-        rename_map[internal_qty_col] = config['name']
-        rename_map[internal_daily_col] = f"{config['name']}_Daily"
+        rename_map[f"qty_veh_{i}"] = config['name']
+        rename_map[f"qty_veh_{i}_daily"] = f"{config['name']}_Daily"
         qty_veh_cols.append(config['name'])
         qty_veh_daily_cols.append(f"{config['name']}_Daily")
 
     final_df.rename(columns={k: v for k, v in rename_map.items() if k in final_df.columns}, inplace=True)
 
-    # --- Build the final column order dynamically ---
-    # Start with a clean base template without placeholders
     template = [col for col in BASE_TEMPLATE_COLUMNS if '#' not in col]
     part_desc_idx = template.index('PART DESCRIPTION')
     family_idx = template.index('FAMILY')
     
-    final_template = (
-        template[:part_desc_idx + 1] +
-        qty_veh_cols + ['TOTAL'] +
-        template[part_desc_idx + 1:family_idx + 1] +
-        qty_veh_daily_cols +
-        template[family_idx + 1:]
-    )
+    final_template = (template[:part_desc_idx + 1] + qty_veh_cols + ['TOTAL'] +
+                      template[part_desc_idx + 1:family_idx + 1] + qty_veh_daily_cols +
+                      template[family_idx + 1:])
 
     for col in final_template:
-        if col not in final_df.columns: final_df[col] = ''
+        if col not in final_df.columns: final_df[col] = np.nan
     final_df = final_df[final_template]
     final_df['SR.NO'] = range(1, len(final_df) + 1)
 
-    # --- Generate Excel with dynamic headers ---
     with st.spinner("Creating the final Excel report..."):
         output = io.BytesIO()
         with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
@@ -412,7 +418,6 @@ def create_formatted_excel_output(df, vehicle_configs):
             final_df.to_excel(writer, sheet_name='Master Data Sheet', startrow=2, header=False, index=False)
             worksheet = writer.sheets['Master Data Sheet']
 
-            # --- Define header sections by start and end columns ---
             final_columns_list = final_df.columns.tolist()
             first_daily_col = qty_veh_daily_cols[0] if qty_veh_daily_cols else 'NET'
             
@@ -433,12 +438,13 @@ def create_formatted_excel_output(df, vehicle_configs):
                 try:
                     start_idx = final_columns_list.index(header['start'])
                     end_idx = final_columns_list.index(header['end'])
-                    if start_idx == end_idx:
-                        worksheet.write(0, start_idx, header['title'], header['style'])
-                    else:
-                        worksheet.merge_range(0, start_idx, 0, end_idx, header['title'], header['style'])
+                    if start_idx <= end_idx:
+                        if start_idx == end_idx:
+                            worksheet.write(0, start_idx, header['title'], header['style'])
+                        else:
+                            worksheet.merge_range(0, start_idx, 0, end_idx, header['title'], header['style'])
                 except ValueError:
-                    st.warning(f"Could not find a header column for '{header['title']}'. Skipping this header.")
+                    st.warning(f"A column for header '{header['title']}' was not found. Skipping header.")
 
             for col_num, value in enumerate(final_columns_list):
                 worksheet.write(1, col_num, value, h_gray)
@@ -540,8 +546,8 @@ def main():
             all_files = st.session_state.all_files
             master_pbom = _consolidate_bom_list(all_files['pbom'])
             master_mbom = _consolidate_bom_list(all_files['mbom'])
-            pbom_parts = set(master_pbom['part_id'])
-            mbom_parts = set(master_mbom['part_id'])
+            pbom_parts = set(master_pbom['part_id']) if master_pbom is not None else set()
+            mbom_parts = set(master_mbom['part_id']) if master_mbom is not None else set()
         st.subheader("BOM Comparison")
         col1, col2, col3 = st.columns(3)
         col1.metric("Parts Unique to PBOM", len(pbom_parts - mbom_parts))
