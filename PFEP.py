@@ -32,12 +32,12 @@ BASE_TEMPLATE_COLUMNS = [
     'H-MM_Supply', 'Volume_Supply', 'QTY/CONTAINER -LS -9M', 'QTY/CONTAINER -LS-12M', 'STORAGE LINE SIDE',
     'L-MM_Line', 'W-MM_Line', 'H-MM_Line', 'Volume_Line', 'CONTAINER / RACK','NO OF TRIPS/DAY', 'INVENTORY LINE SIDE'
 ]
-PFEP_COLUMN_MAP = { 'part_id': 'PARTNO', 'description': 'PART DESCRIPTION', 'net_daily_consumption': 'NET', 'unit_price': 'UNIT PRICE', 'vendor_code': 'VENDOR CODE', 'vendor_name': 'VENDOR NAME', 'city': 'CITY', 'state': 'STATE', 'country': 'COUNTRY', 'pincode': 'PINCODE', 'length': 'L-MM_Size', 'width': 'W-MM_Size', 'height': 'H-MM_Size', 'qty_per_pack': 'QTY/PACK_Sec', 'packing_factor': 'PACKING FACTOR (PF)', 'primary_packaging_factor': 'PRIMARY PACKING FACTOR' }
-INTERNAL_TO_PFEP_NEW_COLS = { 'family': 'FAMILY', 'part_classification': 'PART CLASSIFICATION', 'volume_m3': 'Volume (m^3)', 'size_classification': 'SIZE CLASSIFICATION', 'wh_loc': 'WH LOC', 'inventory_classification': 'INVENTORY CLASSIFICATION' }
+PFEP_COLUMN_MAP = { 'part_id': 'PARTNO', 'description': 'PART DESCRIPTION', 'net_daily_consumption': 'NET', 'unit_price': 'UNIT PRICE', 'vendor_code': 'VENDOR CODE', 'vendor_name': 'VENDOR NAME', 'city': 'CITY', 'state': 'STATE', 'country': 'COUNTRY', 'pincode': 'PINCODE', 'length': 'L-MM_Size', 'width': 'W-MM_Size', 'height': 'H-MM_Size', 'qty_per_pack': 'QTY/PACK_Sec', 'packing_factor': 'PACKING FACTOR (PF)', 'primary_packaging_factor': 'PRIMARY PACKING FACTOR', 'qty_per_pack_prim': 'QTY/PACK_Prim', 'one_way_returnable': 'ONE WAY/ RETURNABLE', 'primary_pack_type': 'PRIMARY PACK TYPE'}
+INTERNAL_TO_PFEP_NEW_COLS = { 'family': 'FAMILY', 'part_classification': 'PART CLASSIFICATION', 'volume_m3': 'Volume (m^3)', 'size_classification': 'SIZE CLASSIFICATION', 'wh_loc': 'WH LOC', 'inventory_classification': 'INVENTORY CLASSIFICATION', 'prim_pack_lifespan': 'PRIM. PACK LIFESPAN', 'sec_pack_lifespan': 'SEC. PACK LIFESPAN'}
 FAMILY_KEYWORD_MAPPING = { "ADAPTOR": ["ADAPTOR", "ADAPTER"], "Beading": ["BEADING"], "Electrical": ["BATTERY", "HVPDU", "ELECTRICAL", "INVERTER", "SENSOR", "DC", "COMPRESSOR", "TMCS", "COOLING", "BRAKE SIGNAL", "VCU", "VEHICLE CONTROL", "EVCC", "EBS ECU", "ECU", "CONTROL UNIT", "SIGNAL", "TRANSMITTER", "TRACTION", "HV", "KWH", "EBS", "SWITCH", "HORN"], "Electronics": ["DISPLAY", "APC", "SCREEN", "MICROPHONE", "CAMERA", "SPEAKER", "DASHBOARD", "ELECTRONICS", "SSD", "WOODWARD", "FDAS", "BDC", "GEN-2", "SENSOR", "BUZZER"], "Wheels": ["WHEEL", "TYRE", "TIRE", "RIM"], "Harness": ["HARNESS", "CABLE"], "Mechanical": ["PUMP", "SHAFT", "LINK", "GEAR", "ARM"], "Hardware": ["NUT", "BOLT", "SCREW", "WASHER", "RIVET", "M5", "M22", "M12", "CLAMP", "CLIP", "CABLE TIE", "DIN", "ZFP"], "Bracket": ["BRACKET", "BRKT", "BKT", "BRCKT"], "ASSY": ["ASSY"], "Sticker": ["STICKER", "LOGO", "EMBLEM"], "Suspension": ["SUSPENSION"], "Tank": ["TANK"], "Tape": ["TAPE", "REFLECTOR", "COLOUR"], "Tool Kit": ["TOOL KIT"], "Valve": ["VALVE"], "Hose": ["HOSE"], "Insulation": ["INSULATION"], "Interior & Exterior": ["ROLLER", "FIRE", "HAMMER"], "L-angle": ["L-ANGLE"], "Lamp": ["LAMP"], "Lock": ["LOCK"], "Lubricants": ["GREASE", "LUBRICANT"], "Medical": ["MEDICAL", "FIRST AID"], "Mirror": ["MIRROR", "ORVM"], "Motor": ["MOTOR"], "Mounting": ["MOUNT", "MTG", "MNTG", "MOUNTED"], "Oil": ["OIL"], "Panel": ["PANEL"], "Pillar": ["PILLAR"], "Pipe": ["PIPE", "TUBE", "SUCTION", "TUBULAR"], "Plate": ["PLATE"], "Plywood": ["FLOORING", "PLYWOOD", "EPGC"], "Profile": ["PROFILE", "ALUMINIUM"], "Rail": ["RAIL"], "Rubber": ["RUBBER", "GROMMET", "MOULDING"], "Seal": ["SEAL"], "Seat": ["SEAT"], "ABS Cover": ["ABS COVER"], "AC": ["AC"], "ACP Sheet": ["ACP SHEET"], "Aluminium": ["ALUMINIUM", "ALUMINUM"], "AXLE": ["AXLE"], "Bush": ["BUSH"], "Chassis": ["CHASSIS"], "Dome": ["DOME"], "Door": ["DOOR"], "Filter": ["FILTER"], "Flap": ["FLAP"], "FRP": ["FRP", "FACIA"], "Glass": ["GLASS", "WINDSHIELD", "WINDSHILED"], "Handle": ["HANDLE", "HAND", "PLASTIC"], "HATCH": ["HATCH"], "HDF Board": ["HDF"] }
 CATEGORY_PRIORITY_FAMILIES = {"ACP Sheet", "ADAPTOR", "Bracket", "Bush", "Flap", "Handle", "Beading", "Lubricants", "Panel", "Pillar", "Rail", "Seal", "Sticker", "Valve"}
 BASE_WAREHOUSE_MAPPING = { "ABS Cover": "HRR", "ADAPTOR": "MEZ B-01(A)", "Beading": "HRR", "AXLE": "FLOOR", "Bush": "HRR", "Chassis": "FLOOR", "Dome": "MEZ C-02(B)", "Door": "MRR(C-01)", "Electrical": "HRR", "Filter": "CRL", "Flap": "MEZ C-02", "Insulation": "MEZ C-02(B)", "Interior & Exterior": "HRR", "L-angle": "MEZ B-01(A)", "Lamp": "CRL", "Lock": "CRL", "Lubricants": "HRR", "Medical": "HRR", "Mirror": "HRR", "Motor": "HRR", "Mounting": "HRR", "Oil": "HRR", "Panel": "MEZ C-02", "Pillar": "MEZ C-02", "Pipe": "HRR", "Plate": "HRR", "Profile": "HRR", "Rail": "CTR(C-01)", "Seal": "HRR", "Seat": "MRR(C-01)", "Sticker": "MEZ B-01(A)", "Suspension": "MRR(C-01)", "Tank": "HRR", "Tool Kit": "HRR", "Valve": "CRL", "Wheels": "HRR", "Hardware": "MEZ B-02(A)", "Glass": "MRR(C-01)", "Harness": "HRR", "Hose": "HRR", "Aluminium": "HRR", "ACP Sheet": "MEZ C-02(B)", "Handle": "HRR", "HATCH": "HRR", "HDF Board": "MRR(C-01)", "FRP": "CTR", "Others": "HRR" }
-GEOLOCATOR = Nominatim(user_agent="inventory_distance_calculator_streamlit_v5", timeout=10)
+GEOLOCATOR = Nominatim(user_agent="inventory_distance_calculator_streamlit_v6", timeout=10)
 @st.cache_data
 def get_lat_lon(pincode, country="India", city="", state="", retries=3, backoff_factor=2):
     pincode_str = str(pincode).strip().split('.')[0]
@@ -270,8 +270,45 @@ class ComprehensiveInventoryProcessor:
         self.data['part_classification'] = self.classifier.classify_all_parts()
         st.success("✅ Percentage-based part classification complete.")
 
+    def run_packaging_classification(self):
+        st.subheader("(D) Packaging Classification & Lifespan")
+        # --- 1. One Way / Returnable Logic ---
+        if 'primary_pack_type' not in self.data.columns:
+            self.data['one_way_returnable'] = 'Manual'
+            st.warning("No 'PRIMARY PACK TYPE' column found. Skipping packaging classification.")
+        else:
+            returnable_keywords = ['metallic pallet', 'collapsible box', 'bucket', 'plastic bin', 'trolley', 'plastic pallet']
+            one_way_keywords = ['bubble wrap', 'carton box', 'gunny bag', 'polybag', 'stretch wrap', 'wooden box', 'open', 'wooden pallet']
+            
+            def classify_pack(pack_type):
+                if pd.isna(pack_type):
+                    return 'Manual'
+                pack_type_lower = str(pack_type).lower()
+                if any(keyword in pack_type_lower for keyword in returnable_keywords):
+                    return 'Returnable'
+                if any(keyword in pack_type_lower for keyword in one_way_keywords):
+                    return 'One Way'
+                return 'Manual'
+            
+            self.data['one_way_returnable'] = self.data['primary_pack_type'].apply(classify_pack)
+            st.success("✅ Automated packaging type classification complete.")
+
+        # --- 2. Lifespan Calculation ---
+        net_daily = pd.to_numeric(self.data['net_daily_consumption'], errors='coerce')
+        
+        if 'qty_per_pack_prim' in self.data.columns:
+            qty_prim = pd.to_numeric(self.data['qty_per_pack_prim'], errors='coerce')
+            # Use np.divide for safe division, returns np.inf on division by zero
+            self.data['prim_pack_lifespan'] = np.divide(qty_prim, net_daily, out=np.full_like(qty_prim, np.nan, dtype=float), where=net_daily!=0)
+        
+        if 'qty_per_pack' in self.data.columns:
+            qty_sec = pd.to_numeric(self.data['qty_per_pack'], errors='coerce')
+            self.data['sec_pack_lifespan'] = np.divide(qty_sec, net_daily, out=np.full_like(qty_sec, np.nan, dtype=float), where=net_daily!=0)
+
+        st.success("✅ Package lifespan calculation complete.")
+
     def run_location_based_norms(self, pincode):
-        st.subheader(f"(D) Distance & Inventory Norms")
+        st.subheader(f"(E) Distance & Inventory Norms")
         with st.spinner(f"Getting coordinates for location pincode: {pincode}..."):
             current_coords = get_lat_lon(pincode, country="India")
         if current_coords == (None, None):
@@ -303,38 +340,52 @@ class ComprehensiveInventoryProcessor:
         st.success(f"✅ Inventory norms calculated.")
 
     def run_warehouse_location_assignment(self):
-        st.subheader("(E) Warehouse Location Assignment")
+        st.subheader("(F) Warehouse Location Assignment")
         if 'family' not in self.data.columns:
             self.data['wh_loc'] = 'HRR'
             st.warning("No 'family' column found. Defaulting warehouse location to 'HRR'.")
-            return
-        def get_wh_loc(row):
-            fam, desc, vol_m3 = row.get('family', 'Others'), row.get('description', ''), row.get('volume_m3', None)
-            match = lambda w: re.search(r'\b' + re.escape(w) + r'\b', str(desc).upper())
-            if fam == "AC" and match("BCS"): return "OUTSIDE"
-            if fam in ["ASSY", "Bracket"] and match("STEERING"): return "DIRECT FROM INSTOR"
-            if fam == "Electronics" and any(match(k) for k in ["CAMERA", "APC", "MNVR", "WOODWARD"]): return "CRL"
-            if fam == "Electrical" and vol_m3 is not None and (vol_m3 * 1_000_000) > 200: return "HRR"
-            if fam == "Mechanical" and match("STEERING"): return "DIRECT FROM INSTOR"
-            if fam == "Plywood" and not match("EDGE"): return "MRR(C-01)"
-            if fam == "Rubber" and match("GROMMET"): return "MEZ B-01"
-            if fam == "Tape" and not match("BUTYL"): return "MEZ B-01"
-            if fam == "Wheels":
-                if match("TYRE") and match("JK"): return "OUTSIDE"
-                if match("RIM"): return "MRR(C-01)"
-            return BASE_WAREHOUSE_MAPPING.get(fam, "HRR")
-        self.data['wh_loc'] = self.data.apply(get_wh_loc, axis=1)
+        else:
+            def get_wh_loc(row):
+                fam, desc, vol_m3 = row.get('family', 'Others'), row.get('description', ''), row.get('volume_m3', None)
+                match = lambda w: re.search(r'\b' + re.escape(w) + r'\b', str(desc).upper())
+                if fam == "AC" and match("BCS"): return "OUTSIDE"
+                if fam in ["ASSY", "Bracket"] and match("STEERING"): return "DIRECT FROM INSTOR"
+                if fam == "Electronics" and any(match(k) for k in ["CAMERA", "APC", "MNVR", "WOODWARD"]): return "CRL"
+                if fam == "Electrical" and vol_m3 is not None and (vol_m3 * 1_000_000) > 200: return "HRR"
+                if fam == "Mechanical" and match("STEERING"): return "DIRECT FROM INSTOR"
+                if fam == "Plywood" and not match("EDGE"): return "MRR(C-01)"
+                if fam == "Rubber" and match("GROMMET"): return "MEZ B-01"
+                if fam == "Tape" and not match("BUTYL"): return "MEZ B-01"
+                if fam == "Wheels":
+                    if match("TYRE") and match("JK"): return "OUTSIDE"
+                    if match("RIM"): return "MRR(C-01)"
+                return BASE_WAREHOUSE_MAPPING.get(fam, "HRR")
+            self.data['wh_loc'] = self.data.apply(get_wh_loc, axis=1)
+        
+        # Expand abbreviated names
+        loc_expansion_map = {
+            'HRR': 'High Rise Rack (HRR)',
+            'CRL': 'Carousal (CRL)',
+            'MEZ': 'Mezzanine (MEZ)',
+            'CTR': 'Cantilever (CTR)',
+            'MRR': 'Mid Rise Rack (MRR)'
+        }
+        # Use a regex replacement to handle variations like 'MEZ B-01(A)'
+        for short, long in loc_expansion_map.items():
+            self.data['wh_loc'] = self.data['wh_loc'].str.replace(short, long, regex=False)
+
         st.success("✅ Automated warehouse location assignment complete.")
 
 # ##########################################################################
 # ### THIS IS THE CORRECTED EXCEL FUNCTION ###
 # ##########################################################################
 def create_formatted_excel_output(df, vehicle_configs):
-    st.subheader("(F) Generating Formatted Excel Report")
+    st.subheader("(G) Generating Formatted Excel Report")
 
     # 1. Create dynamic rename map and final column list
     final_df = df.copy()
     num_veh = len(vehicle_configs)
+    # Combine all maps for renaming
     rename_map = {**PFEP_COLUMN_MAP, **INTERNAL_TO_PFEP_NEW_COLS, 'TOTAL': 'TOTAL'}
     
     qty_veh_cols, qty_veh_daily_cols = [], []
@@ -348,35 +399,23 @@ def create_formatted_excel_output(df, vehicle_configs):
         qty_veh_cols.append(config['name'])
         qty_veh_daily_cols.append(f"{config['name']}_Daily")
 
-    final_df.rename(columns=rename_map, inplace=True)
+    final_df.rename(columns={k: v for k, v in rename_map.items() if k in final_df.columns}, inplace=True)
 
-    # Construct the final dynamic column template
-    ALL_TEMPLATE_COLUMNS = []
-    ALL_TEMPLATE_COLUMNS.extend(['SR.NO', 'PARTNO', 'PART DESCRIPTION'])
-    ALL_TEMPLATE_COLUMNS.extend(qty_veh_cols)
-    ALL_TEMPLATE_COLUMNS.append('TOTAL')
-    ALL_TEMPLATE_COLUMNS.extend(['UOM', 'ST.NO', 'FAMILY'])
-    ALL_TEMPLATE_COLUMNS.extend(qty_veh_daily_cols)
-    ALL_TEMPLATE_COLUMNS.append('NET')
-    ALL_TEMPLATE_COLUMNS.extend([
-        'UNIT PRICE', 'PART CLASSIFICATION', 'L-MM_Size', 'W-MM_Size', 'H-MM_Size', 'Volume (m^3)', 'SIZE CLASSIFICATION', 
-        'VENDOR CODE', 'VENDOR NAME', 'VENDOR TYPE', 'CITY', 'STATE', 'COUNTRY', 'PINCODE', 'PRIMARY PACK TYPE',
-        'L-MM_Prim_Pack', 'W-MM_Prim_Pack', 'H-MM_Prim_Pack', 'QTY/PACK_Prim', 'PRIM. PACK LIFESPAN',
-        'PRIMARY PACKING FACTOR', 'SECONDARY PACK TYPE', 'L-MM_Sec_Pack', 'W-MM_Sec_Pack',
-        'H-MM_Sec_Pack', 'NO OF BOXES', 'QTY/PACK_Sec', 'SEC. PACK LIFESPAN', 'ONE WAY/ RETURNABLE',
-        'DISTANCE CODE', 'INVENTORY CLASSIFICATION', 'RM IN DAYS', 'RM IN QTY',
-        'RM IN INR', 'PACKING FACTOR (PF)', 'NO OF SEC. PACK REQD.', 'NO OF SEC REQ. AS PER PF',
-        'WH LOC', 'PRIMARY LOCATION ID', 'SECONDARY LOCATION ID', 'OVER FLOW TO BE ALLOTED', 
-        'DOCK NUMBER', 'STACKING FACTOR', 'SUPPLY TYPE', 'SUPPLY VEH SET', 'SUPPLY STRATEGY', 
-        'SUPPLY CONDITION', 'CONTAINER LINE SIDE', 'L-MM_Supply', 'W-MM_Supply', 'H-MM_Supply', 
-        'Volume_Supply', 'QTY/CONTAINER -LS -9M', 'QTY/CONTAINER -LS-12M', 'STORAGE LINE SIDE',
-        'L-MM_Line', 'W-MM_Line', 'H-MM_Line', 'Volume_Line', 'CONTAINER / RACK', 'NO OF TRIPS/DAY', 'INVENTORY LINE SIDE'
-    ])
-    
+    # Construct the final dynamic column template by re-using BASE_TEMPLATE_COLUMNS
+    final_template = []
+    for col in BASE_TEMPLATE_COLUMNS:
+        if "# Placeholder for dynamic Qty/Veh cols" in col:
+            final_template.extend(qty_veh_cols)
+            final_template.append('TOTAL')
+        elif "# Placeholder for dynamic Qty/Veh_Daily cols" in col:
+            final_template.extend(qty_veh_daily_cols)
+        else:
+            final_template.append(col)
+
     # 2. Prepare the DataFrame
-    for col in ALL_TEMPLATE_COLUMNS:
+    for col in final_template:
         if col not in final_df.columns: final_df[col] = ''
-    final_df = final_df[ALL_TEMPLATE_COLUMNS]
+    final_df = final_df[final_template]
     final_df['SR.NO'] = range(1, len(final_df) + 1)
 
     # 3. Write to Excel with robust, sequential header creation
@@ -420,16 +459,29 @@ def create_formatted_excel_output(df, vehicle_configs):
 
 def render_review_step(step_name, internal_key, next_stage):
     st.markdown("---")
-    st.header(f"Step 3: Manual Review for {step_name}")
+    st.header(f"Manual Review: {step_name}")
     st.info(f"The automated {step_name.lower()} is complete. You can now review the results, download them, make changes, and upload them to override the automated classification.")
     
-    pfep_name = INTERNAL_TO_PFEP_NEW_COLS.get(internal_key, internal_key)
-    review_cols = ['part_id', 'description', internal_key]
+    # Get the user-facing column name from all available maps
+    pfep_name = INTERNAL_TO_PFEP_NEW_COLS.get(internal_key, PFEP_COLUMN_MAP.get(internal_key, internal_key))
     
-    # Ensure columns exist before creating the review DF
+    # For packaging, we might want to review the source column as well
+    review_cols = ['part_id', 'description']
+    if internal_key == 'one_way_returnable':
+        review_cols.append('primary_pack_type')
+    review_cols.append(internal_key)
+
     existing_cols = [c for c in review_cols if c in st.session_state.master_df.columns]
     review_df = st.session_state.master_df[existing_cols].copy()
-    review_df.rename(columns={internal_key: pfep_name, 'part_id': 'PARTNO', 'description': 'PART DESCRIPTION'}, inplace=True)
+    
+    # Rename all columns for user-friendliness
+    display_rename_map = {
+        internal_key: pfep_name, 
+        'part_id': 'PARTNO', 
+        'description': 'PART DESCRIPTION',
+        'primary_pack_type': 'PRIMARY PACK TYPE'
+    }
+    review_df.rename(columns=display_rename_map, inplace=True)
     
     st.dataframe(review_df.head(20))
     
@@ -456,7 +508,7 @@ def render_review_step(step_name, internal_key, next_stage):
                 st.session_state.app_stage = next_stage
                 st.rerun()
             else:
-                st.error("Upload failed or the file is invalid. It must contain 'PARTNO' and a '{pfep_name}' column.")
+                st.error(f"Upload failed or the file is invalid. It must contain 'PARTNO' and '{pfep_name}' columns.")
                 
     with col2:
         if st.button(f"Skip & Continue with Automated Results"):
@@ -530,6 +582,7 @@ def main():
         {"process_stage": "process_family", "review_stage": "review_family", "method": "run_family_classification", "key": "family", "name": "Family Classification"},
         {"process_stage": "process_size", "review_stage": "review_size", "method": "run_size_classification", "key": "size_classification", "name": "Size Classification"},
         {"process_stage": "process_part", "review_stage": "review_part", "method": "run_part_classification", "key": "part_classification", "name": "Part Classification"},
+        {"process_stage": "process_packaging", "review_stage": "review_packaging", "method": "run_packaging_classification", "key": "one_way_returnable", "name": "Packaging Classification"},
         {"process_stage": "process_norms", "review_stage": "review_norms", "method": "run_location_based_norms", "key": "inventory_classification", "name": "Inventory Norms"},
         {"process_stage": "process_wh", "review_stage": "review_wh", "method": "run_warehouse_location_assignment", "key": "wh_loc", "name": "Warehouse Location"},
     ]
@@ -538,6 +591,7 @@ def main():
         next_stage = processing_steps[i+1]['process_stage'] if i + 1 < len(processing_steps) else "generate_report"
         
         if st.session_state.app_stage == step['process_stage']:
+            st.header(f"Step 3: Automated Processing")
             with st.spinner(f"Running {step['name']}..."):
                 processor = st.session_state.processor
                 # Handle methods that require arguments
