@@ -358,7 +358,7 @@ def main():
         if current_stage_index >= 1: processor.run_family_classification()
         if current_stage_index >= 2: processor.run_size_classification()
         if current_stage_index >= 3: processor.run_part_classification()
-        if current_state_index >= 4: processor.run_location_based_norms(st.session_state.pincode)
+        if current_stage_index >= 4: processor.run_location_based_norms(st.session_state.pincode)
         if current_stage_index >= 5: processor.run_warehouse_location_assignment()
 
         st.session_state.master_df = processor.data.copy()
