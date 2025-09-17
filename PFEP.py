@@ -97,7 +97,8 @@ def _consolidate_bom_list(bom_list):
     master = pd.concat(valid_boms, ignore_index=True)
     
     qty_cols = [col for col in master.columns if 'qty_veh_temp' in col]
-    other_cols = [col for col in master.columns if col not in qty_cols and col != 'part_id']
+    # Explicitly exclude supply_condition from being aggregated and carried over
+    other_cols = [col for col in master.columns if col not in qty_cols and col != 'part_id' and col != 'supply_condition']
     
     agg_dict = {}
     for col in qty_cols: agg_dict[col] = 'sum'
@@ -106,7 +107,7 @@ def _consolidate_bom_list(bom_list):
     master[qty_cols] = master[qty_cols].fillna(0)
     master = master.groupby('part_id').agg(agg_dict).reset_index()
     
-    # NEW LOGIC: Revert placeholder 0s back to NaN for accurate empty cell representation
+    # Revert placeholder 0s back to NaN for accurate empty cell representation
     for col in qty_cols:
         master[col] = master[col].replace(0, np.nan)
         
@@ -139,10 +140,9 @@ def load_all_files(uploaded_files):
                 if df is not None:
                     processed_df = find_and_rename_columns(df)
                     
-                    # NEW LOGIC: Filter out "Inhouse" parts from MBOM files
+                    # Filter out "Inhouse" parts from MBOM files
                     if key == 'mbom' and 'supply_condition' in processed_df.columns:
                         initial_count = len(processed_df)
-                        # Use ~ to invert the boolean mask. Keep rows that are NOT 'inhouse'.
                         processed_df = processed_df[~processed_df['supply_condition'].str.contains('inhouse', case=False, na=False)]
                         removed_count = initial_count - len(processed_df)
                         if removed_count > 0:
@@ -167,7 +167,6 @@ def finalize_master_df(base_bom_df, supplementary_dfs):
         final_qty_cols = sorted(rename_map.values())
         
         for col in final_qty_cols:
-            # Convert to numeric, coercing errors to NaN, then let downstream functions handle NaN
             final_df[col] = pd.to_numeric(final_df[col], errors='coerce')
             
         st.success(f"Consolidated base has {final_df['part_id'].nunique()} unique parts.")
@@ -178,7 +177,7 @@ def finalize_master_df(base_bom_df, supplementary_dfs):
 # --- 3. CLASSIFICATION AND PROCESSING CLASSES ---
 class PartClassificationSystem:
     def __init__(self):
-        self.percentages = {'C': {'target': 60}, 'B': {'target': 25}, 'A': {'target': 12}, 'AA': {'target': 3}}
+        self.percentages = {'C': {'target': 60, 'tolerance': 5}, 'B': {'target': 25, 'tolerance': 2}, 'A': {'target': 12, 'tolerance': 2}, 'AA': {'target': 3, 'tolerance': 1}}
         self.calculated_ranges = {}
 
     def calculate_percentage_ranges(self, df, price_column):
@@ -225,11 +224,10 @@ class ComprehensiveInventoryProcessor:
         st.subheader("Calculating Daily & Net Consumption")
         daily_cols = []
         for col in qty_cols:
-            if col not in self.data.columns: self.data[col] = np.nan # Use NaN for missing
+            if col not in self.data.columns: self.data[col] = np.nan
         
         for i, col in enumerate(qty_cols):
             daily_col_name = f"{col}_daily"
-            # Multiplication with NaN results in NaN, which is fine. Sum will treat NaN as 0.
             self.data[daily_col_name] = self.data[col] * multipliers[i]
             daily_cols.append(daily_col_name)
 
@@ -259,7 +257,6 @@ class ComprehensiveInventoryProcessor:
                        for kw in kws for pos in (find_pos(kw),) if pos != -1)
             
             try:
-                # Need to handle the case where the generator might be empty
                 first_match = min(matches, key=lambda x: x[0])
                 return first_match[1]
             except ValueError:
