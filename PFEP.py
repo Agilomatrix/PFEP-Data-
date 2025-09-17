@@ -277,7 +277,7 @@ class ComprehensiveInventoryProcessor:
             self.data['one_way_returnable'] = 'Manual'
             st.warning("No 'PRIMARY PACK TYPE' column found. Skipping packaging classification.")
         else:
-            returnable_keywords = ['metallic pallet', 'collapsible box', 'bucket', 'plastic bin', 'trolley', 'plastic pallet', 'mesh bin', 'Bin A', 'PP box']
+            returnable_keywords = ['metallic pallet', 'collapsible box', 'bucket', 'plastic bin', 'trolley', 'plastic pallet', 'bin a', 'mesh bin', 'drum']
             one_way_keywords = ['bubble wrap', 'carton box', 'gunny bag', 'polybag', 'stretch wrap', 'wooden box', 'open', 'wooden pallet', 'foam', 'plastic bag']
             
             def classify_pack(pack_type):
@@ -532,7 +532,14 @@ def main():
         st.header("Step 1: Upload Data Files")
         st.info("Upload all relevant files. The tool will automatically find all 'Quantity per Vehicle' columns.")
         uploaded_files = {}
-        file_options = [ ("Vendor Master", "vendor_master", False), ("Packaging Details", "packaging", True), ("PBOM", "pbom", True), ("MBOM", "mbom", True), ("Part Attribute", "part_attribute", True) ]
+        # Reordered file options as requested
+        file_options = [ 
+            ("PBOM", "pbom", True), 
+            ("MBOM", "mbom", True), 
+            ("Part Attribute", "part_attribute", True),
+            ("Vendor Master", "vendor_master", False), 
+            ("Packaging Details", "packaging", True)
+        ]
         for display_name, key_name, is_multiple in file_options:
             with st.expander(f"Upload {display_name} File(s)"):
                 uploaded_files[key_name] = st.file_uploader(f"Upload", type=['csv', 'xlsx'], accept_multiple_files=is_multiple, key=f"upload_{key_name}", label_visibility="collapsed")
