@@ -97,7 +97,6 @@ def _consolidate_bom_list(bom_list):
     master = pd.concat(valid_boms, ignore_index=True)
     
     qty_cols = [col for col in master.columns if 'qty_veh_temp' in col]
-    # Explicitly exclude supply_condition from being aggregated and carried over
     other_cols = [col for col in master.columns if col not in qty_cols and col != 'part_id' and col != 'supply_condition']
     
     agg_dict = {}
@@ -107,7 +106,6 @@ def _consolidate_bom_list(bom_list):
     master[qty_cols] = master[qty_cols].fillna(0)
     master = master.groupby('part_id').agg(agg_dict).reset_index()
     
-    # Revert placeholder 0s back to NaN for accurate empty cell representation
     for col in qty_cols:
         master[col] = master[col].replace(0, np.nan)
         
@@ -140,7 +138,6 @@ def load_all_files(uploaded_files):
                 if df is not None:
                     processed_df = find_and_rename_columns(df)
                     
-                    # Filter out "Inhouse" parts from MBOM files
                     if key == 'mbom' and 'supply_condition' in processed_df.columns:
                         initial_count = len(processed_df)
                         processed_df = processed_df[~processed_df['supply_condition'].str.contains('inhouse', case=False, na=False)]
@@ -161,6 +158,12 @@ def finalize_master_df(base_bom_df, supplementary_dfs):
         
         final_df.drop_duplicates(subset=['part_id'], keep='first', inplace=True)
         
+        # NEW LOGIC: Ensure vendor columns are treated as text to preserve empty cells
+        vendor_cols = ['vendor_code', 'vendor_name', 'vendor_type', 'city', 'state', 'country', 'pincode']
+        for col in vendor_cols:
+            if col in final_df.columns:
+                final_df[col] = final_df[col].astype('object')
+
         detected_qty_cols = sorted([col for col in final_df.columns if 'qty_veh_temp_' in col])
         rename_map = {old_name: f"qty_veh_{i}" for i, old_name in enumerate(detected_qty_cols)}
         final_df.rename(columns=rename_map, inplace=True)
@@ -177,7 +180,7 @@ def finalize_master_df(base_bom_df, supplementary_dfs):
 # --- 3. CLASSIFICATION AND PROCESSING CLASSES ---
 class PartClassificationSystem:
     def __init__(self):
-        self.percentages = {'C': {'target': 60, 'tolerance': 5}, 'B': {'target': 25, 'tolerance': 2}, 'A': {'target': 12, 'tolerance': 2}, 'AA': {'target': 3, 'tolerance': 1}}
+        self.percentages = {'C': {'target': 60}, 'B': {'target': 25}, 'A': {'target': 12}, 'AA': {'target': 3}}
         self.calculated_ranges = {}
 
     def calculate_percentage_ranges(self, df, price_column):
