@@ -277,8 +277,8 @@ class ComprehensiveInventoryProcessor:
             self.data['one_way_returnable'] = 'Manual'
             st.warning("No 'PRIMARY PACK TYPE' column found. Skipping packaging classification.")
         else:
-            returnable_keywords = ['metallic pallet', 'collapsible box', 'bucket', 'plastic bin', 'trolley', 'plastic pallet']
-            one_way_keywords = ['bubble wrap', 'carton box', 'gunny bag', 'polybag', 'stretch wrap', 'wooden box', 'open', 'wooden pallet']
+            returnable_keywords = ['metallic pallet', 'collapsible box', 'bucket', 'plastic bin', 'trolley', 'plastic pallet', 'mesh bin', 'Bin A', 'PP box']
+            one_way_keywords = ['bubble wrap', 'carton box', 'gunny bag', 'polybag', 'stretch wrap', 'wooden box', 'open', 'wooden pallet', 'foam', 'plastic bag']
             
             def classify_pack(pack_type):
                 if pd.isna(pack_type):
