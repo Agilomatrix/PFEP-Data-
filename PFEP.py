@@ -80,23 +80,44 @@ def find_and_rename_columns(df):
     qty_veh_cols = [col for col in df.columns if qty_veh_regex.search(str(col))]
     for original_col in qty_veh_cols:
         if original_col not in rename_dict:
-            rename_dict[original_col] = f"qty_veh_temp_{original_col}"
-            found_keys.append(f"qty_veh_temp_{original_col} (from {original_col})")
+            # Generate a unique temporary name based on the original column name
+            temp_name = f"qty_veh_temp_{original_col}".replace(" ", "_")
+            rename_dict[original_col] = temp_name
+            found_keys.append(f"{temp_name} (from {original_col})")
     df.rename(columns=rename_dict, inplace=True)
     if found_keys: st.info(f"   Found and mapped columns: {found_keys}")
     else: st.warning("   Could not automatically map any standard columns.")
     return df
+
+# ##########################################################################
+# ### THIS IS THE CORRECTED FUNCTION WITH SMART AGGREGATION ###
+# ##########################################################################
 def _consolidate_bom_list(bom_list):
     valid_boms = [df for df in bom_list if df is not None and 'part_id' in df.columns]
     if not valid_boms: return None
     
-    # Use concat for a more robust merge, especially with differing columns
     master = pd.concat(valid_boms, ignore_index=True)
     
-    # Consolidate data by taking the first non-null value for each part_id
-    # This is more efficient than repeated merges
-    master = master.groupby('part_id').first().reset_index()
+    # Identify quantity columns to sum them, and other columns to take the first value
+    qty_cols = [col for col in master.columns if 'qty_veh_temp' in col]
+    other_cols = [col for col in master.columns if col not in qty_cols and col != 'part_id']
+    
+    # Create the aggregation dictionary
+    agg_dict = {}
+    # For qty columns, fill NaN with 0 and then sum. This correctly adds quantities across files.
+    for col in qty_cols:
+        agg_dict[col] = 'sum'
+    # For other columns, take the first non-null value.
+    for col in other_cols:
+        agg_dict[col] = 'first'
+        
+    # Group by part_id and apply the specific aggregations
+    # Fill NA for sum columns before aggregating
+    master[qty_cols] = master[qty_cols].fillna(0)
+    master = master.groupby('part_id').agg(agg_dict).reset_index()
+    
     return master
+
 def _merge_supplementary_df(main_df, new_df):
     if 'part_id' not in new_df.columns: return main_df
     if 'part_id' in main_df.columns: main_df = main_df.set_index('part_id')
@@ -106,29 +127,22 @@ def _merge_supplementary_df(main_df, new_df):
     new_df.drop_duplicates(subset=['part_id'], keep='first', inplace=True)
     new_df = new_df.set_index('part_id')
     
-    # Update existing columns and add new ones
     main_df.update(new_df)
     new_cols = new_df.columns.difference(main_df.columns)
     main_df = main_df.join(new_df[new_cols])
     
     return main_df.reset_index()
 
-# This function is now simplified to just load and preprocess
 def load_all_files(uploaded_files):
-    file_types = {
-        "pbom": [], "mbom": [], "part_attribute": [], 
-        "packaging": [], "vendor_master": []
-    }
+    file_types = { "pbom": [], "mbom": [], "part_attribute": [], "packaging": [], "vendor_master": [] }
     
     with st.spinner("Processing uploaded files..."):
         for key, files in uploaded_files.items():
             if not files: continue
-            # Handle both single and multiple file uploads
             file_list = files if isinstance(files, list) else [files]
             for f in file_list:
                 df = read_uploaded_file(f)
                 if df is not None:
-                    # Append the processed dataframe to the correct list
                     file_types[key].append(find_and_rename_columns(df))
     return file_types
 
@@ -148,10 +162,10 @@ def finalize_master_df(base_bom_df, supplementary_dfs):
         final_qty_cols = sorted(rename_map.values())
         
         for col in final_qty_cols:
-            numeric_col = pd.to_numeric(final_df[col], errors='coerce')
-            invalid_count = numeric_col.isna().sum()
-            if invalid_count > 0: st.warning(f"Found {invalid_count} non-numeric values in a quantity column. Setting them to 0.")
-            final_df[col] = numeric_col.fillna(0)
+            numeric_col = pd.to_numeric(final_df[col], errors='coerce').fillna(0)
+            invalid_count = (numeric_col < 0).sum()
+            if invalid_count > 0: st.warning(f"Found {invalid_count} negative values in a quantity column. Correcting them.")
+            final_df[col] = numeric_col
             
         st.success(f"Consolidated base has {final_df['part_id'].nunique()} unique parts.")
         st.success(f"Detected {len(final_qty_cols)} unique 'Quantity per Vehicle' columns.")
@@ -200,9 +214,6 @@ class PartClassificationSystem:
         if self.parts_data is None or not self.calculated_ranges: return None
         return self.parts_data[self.price_column].apply(self.classify_part)
         
-# ##########################################################################
-# ### THIS IS THE REVISED PROCESSOR WITH MANUAL REVIEW INTEGRATION ###
-# ##########################################################################
 class ComprehensiveInventoryProcessor:
     def __init__(self, initial_data):
         self.data = initial_data.copy()
@@ -212,12 +223,23 @@ class ComprehensiveInventoryProcessor:
     def calculate_dynamic_consumption(self, qty_cols, multipliers):
         st.subheader("Calculating Daily & Net Consumption")
         daily_cols = []
+        # Ensure qty_cols exist, otherwise create them with 0
+        for col in qty_cols:
+            if col not in self.data.columns:
+                self.data[col] = 0
+        
         for i, col in enumerate(qty_cols):
             daily_col_name = f"{col}_daily"
             self.data[daily_col_name] = self.data[col] * multipliers[i]
             daily_cols.append(daily_col_name)
-        self.data['TOTAL'] = self.data[qty_cols].sum(axis=1)
-        self.data['net_daily_consumption'] = self.data[daily_cols].sum(axis=1)
+
+        if qty_cols:
+            self.data['TOTAL'] = self.data[qty_cols].sum(axis=1)
+            self.data['net_daily_consumption'] = self.data[daily_cols].sum(axis=1)
+        else: # Handle case with no qty columns detected
+            self.data['TOTAL'] = 0
+            self.data['net_daily_consumption'] = 0
+
         st.success("Consumption calculated.")
         return self.data
 
@@ -272,39 +294,28 @@ class ComprehensiveInventoryProcessor:
 
     def run_packaging_classification(self):
         st.subheader("(D) Packaging Classification & Lifespan")
-        # --- 1. One Way / Returnable Logic ---
         if 'primary_pack_type' not in self.data.columns:
             self.data['one_way_returnable'] = 'Manual'
             st.warning("No 'PRIMARY PACK TYPE' column found. Skipping packaging classification.")
         else:
             returnable_keywords = ['metallic pallet', 'collapsible box', 'bucket', 'plastic bin', 'trolley', 'plastic pallet', 'bin a', 'mesh bin', 'drum']
             one_way_keywords = ['bubble wrap', 'carton box', 'gunny bag', 'polybag', 'stretch wrap', 'wooden box', 'open', 'wooden pallet', 'foam', 'plastic bag']
-            
             def classify_pack(pack_type):
-                if pd.isna(pack_type):
-                    return 'Manual'
+                if pd.isna(pack_type): return 'Manual'
                 pack_type_lower = str(pack_type).lower()
-                if any(keyword in pack_type_lower for keyword in returnable_keywords):
-                    return 'Returnable'
-                if any(keyword in pack_type_lower for keyword in one_way_keywords):
-                    return 'One Way'
+                if any(keyword in pack_type_lower for keyword in returnable_keywords): return 'Returnable'
+                if any(keyword in pack_type_lower for keyword in one_way_keywords): return 'One Way'
                 return 'Manual'
-            
             self.data['one_way_returnable'] = self.data['primary_pack_type'].apply(classify_pack)
             st.success("✅ Automated packaging type classification complete.")
 
-        # --- 2. Lifespan Calculation ---
         net_daily = pd.to_numeric(self.data['net_daily_consumption'], errors='coerce')
-        
         if 'qty_per_pack_prim' in self.data.columns:
             qty_prim = pd.to_numeric(self.data['qty_per_pack_prim'], errors='coerce')
-            # Use np.divide for safe division, returns np.inf on division by zero
             self.data['prim_pack_lifespan'] = np.divide(qty_prim, net_daily, out=np.full_like(qty_prim, np.nan, dtype=float), where=net_daily!=0)
-        
         if 'qty_per_pack' in self.data.columns:
             qty_sec = pd.to_numeric(self.data['qty_per_pack'], errors='coerce')
             self.data['sec_pack_lifespan'] = np.divide(qty_sec, net_daily, out=np.full_like(qty_sec, np.nan, dtype=float), where=net_daily!=0)
-
         st.success("✅ Package lifespan calculation complete.")
 
     def run_location_based_norms(self, pincode):
@@ -362,69 +373,46 @@ class ComprehensiveInventoryProcessor:
                 return BASE_WAREHOUSE_MAPPING.get(fam, "HRR")
             self.data['wh_loc'] = self.data.apply(get_wh_loc, axis=1)
         
-        # Expand abbreviated names
-        loc_expansion_map = {
-            'HRR': 'High Rise Rack (HRR)',
-            'CRL': 'Carousal (CRL)',
-            'MEZ': 'Mezzanine (MEZ)',
-            'CTR': 'Cantilever (CTR)',
-            'MRR': 'Mid Rise Rack (MRR)'
-        }
-        # Use a regex replacement to handle variations like 'MEZ B-01(A)'
+        loc_expansion_map = { 'HRR': 'High Rise Rack (HRR)', 'CRL': 'Carousal (CRL)', 'MEZ': 'Mezzanine (MEZ)', 'CTR': 'Cantilever (CTR)', 'MRR': 'Mid Rise Rack (MRR)' }
         for short, long in loc_expansion_map.items():
             self.data['wh_loc'] = self.data['wh_loc'].astype(str).str.replace(short, long, regex=False)
-
         st.success("✅ Automated warehouse location assignment complete.")
 
-# ##########################################################################
-# ### THIS IS THE CORRECTED EXCEL FUNCTION ###
-# ##########################################################################
 def create_formatted_excel_output(df, vehicle_configs):
     st.subheader("(G) Generating Formatted Excel Report")
-
-    # 1. Create dynamic rename map and final column list
     final_df = df.copy()
     num_veh = len(vehicle_configs)
-    # Combine all maps for renaming
     rename_map = {**PFEP_COLUMN_MAP, **INTERNAL_TO_PFEP_NEW_COLS, 'TOTAL': 'TOTAL'}
     
     qty_veh_cols, qty_veh_daily_cols = [], []
     for i, config in enumerate(vehicle_configs):
         internal_qty_col = f"qty_veh_{i}"
         internal_daily_col = f"qty_veh_{i}_daily"
-        
         rename_map[internal_qty_col] = config['name']
         rename_map[internal_daily_col] = f"{config['name']}_Daily"
-        
         qty_veh_cols.append(config['name'])
         qty_veh_daily_cols.append(f"{config['name']}_Daily")
 
     final_df.rename(columns={k: v for k, v in rename_map.items() if k in final_df.columns}, inplace=True)
 
-    # Construct the final dynamic column template by re-using BASE_TEMPLATE_COLUMNS
     final_template = []
-    # This logic replaces the placeholder comments with the actual dynamic columns
     base_col_iter = iter(BASE_TEMPLATE_COLUMNS)
     for col in base_col_iter:
-        if col == 'PART DESCRIPTION':
-            final_template.append(col)
+        if 'PART DESCRIPTION' in col:
+            final_template.append('PART DESCRIPTION')
             final_template.extend(qty_veh_cols)
             final_template.append('TOTAL')
-            next(base_col_iter, None) # Skip placeholder
-        elif col == 'FAMILY':
-            final_template.append(col)
+        elif 'FAMILY' in col:
+            final_template.append('FAMILY')
             final_template.extend(qty_veh_daily_cols)
-            next(base_col_iter, None) # Skip placeholder
-        else:
+        elif "# Placeholder" not in col:
             final_template.append(col)
 
-    # 2. Prepare the DataFrame
     for col in final_template:
         if col not in final_df.columns: final_df[col] = ''
     final_df = final_df[final_template]
     final_df['SR.NO'] = range(1, len(final_df) + 1)
 
-    # 3. Write to Excel with robust, sequential header creation
     with st.spinner("Creating the final Excel report..."):
         output = io.BytesIO()
         with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
@@ -441,9 +429,7 @@ def create_formatted_excel_output(df, vehicle_configs):
                 ('Size & Classification', 5), ('VENDOR DETAILS', 7), ('PACKAGING DETAILS', 15),
                 ('INVENTORY NORM', 8), ('WH STORAGE', 8), ('SUPPLY SYSTEM', 4), ('LINE SIDE STORAGE', 15)
             ]
-            
             styles = [h_gray, s_orange, s_orange, s_orange, s_blue, s_orange, s_blue, s_orange, s_blue, h_gray]
-            
             current_col = 0
             for i, (title, num_cols) in enumerate(headers_config):
                 style = styles[i]
@@ -453,10 +439,8 @@ def create_formatted_excel_output(df, vehicle_configs):
                     worksheet.write(0, current_col, title, style)
                 current_col += num_cols
 
-            # Write individual column headers on the second row
             for col_num, value in enumerate(final_df.columns):
                 worksheet.write(1, col_num, value, h_gray)
-            
             worksheet.set_column('A:A', 6); worksheet.set_column('B:C', 22); worksheet.set_column('D:ZZ', 18)
 
         processed_data = output.getvalue()
@@ -512,16 +496,13 @@ def render_review_step(step_name, internal_key, next_stage):
             st.session_state.app_stage = next_stage
             st.rerun()
 
-# --- 6. MAIN WORKFLOW ---
 def main():
     st.title("🏭 Dynamic Inventory & Supply Chain Analysis System")
 
-    # Initialize session state variables
     for key in ['app_stage', 'master_df', 'qty_cols', 'final_report', 'processor', 'all_files']:
         if key not in st.session_state:
             st.session_state[key] = None if key != 'app_stage' else 'upload'
 
-    # --- STAGE: UPLOAD ---
     if st.session_state.app_stage == "upload":
         st.header("Step 1: Upload Data Files")
         st.info("Upload all relevant files. The tool will automatically find all 'Quantity per Vehicle' columns.")
@@ -537,7 +518,6 @@ def main():
         pincode = st.text_input("Enter your location's pincode for distance calculations", value="411001")
 
         if st.button("Process Uploaded Files"):
-            # Check for at least one BOM file
             has_bom = (uploaded_files['pbom']) or (uploaded_files['mbom'])
             if not has_bom:
                 st.error("You must upload at least one PBOM or MBOM file.")
@@ -546,13 +526,11 @@ def main():
                 st.session_state.all_files = all_files
                 st.session_state.pincode = pincode
 
-                # Conditional Step: If both PBOM and MBOM are uploaded, go to selection screen
                 if all_files['pbom'] and all_files['mbom']:
                     st.session_state.app_stage = "bom_selection"
-                else: # Otherwise, consolidate immediately and proceed
+                else:
                     bom_dfs = all_files['pbom'] + all_files['mbom']
                     base_bom = _consolidate_bom_list(bom_dfs)
-                    
                     if base_bom is not None:
                         supplementary_dfs = [all_files['part_attribute'], all_files['vendor_master'], all_files['packaging']]
                         master_df, qty_cols = finalize_master_df(base_bom, supplementary_dfs)
@@ -563,44 +541,30 @@ def main():
                         st.error("Failed to consolidate any BOM data. Please check your files.")
                 st.rerun()
 
-    # --- NEW STAGE: BOM SELECTION ---
     if st.session_state.app_stage == "bom_selection":
         st.header("Step 1.5: BOM Base Selection")
         st.info("You have uploaded both PBOM and MBOM files. Please choose which dataset to use as the base for the PFEP analysis.")
-
         with st.spinner("Analyzing differences between PBOM and MBOM..."):
             all_files = st.session_state.all_files
             master_pbom = _consolidate_bom_list(all_files['pbom'])
             master_mbom = _consolidate_bom_list(all_files['mbom'])
-            
             pbom_parts = set(master_pbom['part_id'])
             mbom_parts = set(master_mbom['part_id'])
-
             unique_to_pbom = pbom_parts - mbom_parts
             unique_to_mbom = mbom_parts - pbom_parts
             common_parts = pbom_parts.intersection(mbom_parts)
-        
         st.subheader("BOM Comparison")
         col1, col2, col3 = st.columns(3)
         col1.metric("Parts Unique to PBOM", len(unique_to_pbom))
         col2.metric("Parts Unique to MBOM", len(unique_to_mbom))
         col3.metric("Parts Common to Both", len(common_parts))
-
-        bom_choice = st.radio(
-            "Select the BOM base for analysis:",
-            ('Use PBOM as base', 'Use MBOM as base', 'Combine both PBOM and MBOM'),
-            horizontal=True
-        )
-
+        bom_choice = st.radio("Select the BOM base for analysis:",
+            ('Use PBOM as base', 'Use MBOM as base', 'Combine both PBOM and MBOM'), horizontal=True)
         if st.button("Confirm Selection and Continue"):
             base_bom_df = None
-            if bom_choice == 'Use PBOM as base':
-                base_bom_df = master_pbom
-            elif bom_choice == 'Use MBOM as base':
-                base_bom_df = master_mbom
-            elif bom_choice == 'Combine both PBOM and MBOM':
-                base_bom_df = _consolidate_bom_list([master_pbom, master_mbom])
-            
+            if bom_choice == 'Use PBOM as base': base_bom_df = master_pbom
+            elif bom_choice == 'Use MBOM as base': base_bom_df = master_mbom
+            elif bom_choice == 'Combine both PBOM and MBOM': base_bom_df = _consolidate_bom_list([master_pbom, master_mbom])
             if base_bom_df is not None:
                 supplementary_dfs = [all_files['part_attribute'], all_files['vendor_master'], all_files['packaging']]
                 master_df, qty_cols = finalize_master_df(base_bom_df, supplementary_dfs)
@@ -609,16 +573,14 @@ def main():
                 st.session_state.app_stage = "configure"
                 st.rerun()
 
-    # --- STAGE: CONFIGURE ---
     if st.session_state.app_stage == "configure":
         st.markdown("---")
         st.header("Step 2: Configure Vehicle Types")
         if not st.session_state.qty_cols:
             st.warning("No 'Quantity per Vehicle' columns were detected. You can proceed, but consumption calculations will be zero.")
-            st.session_state.qty_cols = [] # Ensure it's a list
+            st.session_state.qty_cols = []
         else:
             st.info("We detected the following quantity columns. Please provide a descriptive name and daily production for each.")
-
         vehicle_configs = []
         for i, col_name in enumerate(st.session_state.qty_cols):
             st.markdown(f"**Detected Column #{i+1}**")
@@ -626,17 +588,15 @@ def main():
             name = cols[0].text_input("Custom Vehicle Name", value=f"Vehicle Type {i+1}", key=f"name_{i}")
             multiplier = cols[1].number_input("Daily Production Quantity", min_value=0.0, value=1.0, step=0.1, key=f"mult_{i}")
             vehicle_configs.append({"name": name, "multiplier": multiplier})
-        
         if st.button("🚀 Run Full Analysis"):
             st.session_state.vehicle_configs = vehicle_configs
             processor = ComprehensiveInventoryProcessor(st.session_state.master_df)
-            final_df = processor.calculate_dynamic_consumption( st.session_state.qty_cols, [c['multiplier'] for c in vehicle_configs] )
+            final_df = processor.calculate_dynamic_consumption( st.session_state.qty_cols, [c.get('multiplier', 0) for c in vehicle_configs] )
             st.session_state.master_df = final_df
             st.session_state.processor = processor
             st.session_state.app_stage = "process_family"
             st.rerun()
 
-    # --- PROCESSING AND REVIEW STAGES ---
     processing_steps = [
         {"process_stage": "process_family", "review_stage": "review_family", "method": "run_family_classification", "key": "family", "name": "Family Classification"},
         {"process_stage": "process_size", "review_stage": "review_size", "method": "run_size_classification", "key": "size_classification", "name": "Size Classification"},
@@ -647,7 +607,6 @@ def main():
     ]
     for i, step in enumerate(processing_steps):
         next_stage = processing_steps[i+1]['process_stage'] if i + 1 < len(processing_steps) else "generate_report"
-        
         if st.session_state.app_stage == step['process_stage']:
             st.header(f"Step 3: Automated Processing")
             with st.spinner(f"Running {step['name']}..."):
@@ -659,11 +618,9 @@ def main():
                 st.session_state.master_df = processor.data
                 st.session_state.app_stage = step['review_stage']
                 st.rerun()
-
         if st.session_state.app_stage == step['review_stage']:
             render_review_step(step['name'], step['key'], next_stage)
 
-    # --- STAGE: GENERATE REPORT ---
     if st.session_state.app_stage == "generate_report":
         report_data = create_formatted_excel_output(st.session_state.master_df, st.session_state.vehicle_configs)
         st.session_state.final_report = report_data
@@ -672,7 +629,6 @@ def main():
         st.session_state.app_stage = "download"
         st.rerun()
 
-    # --- STAGE: DOWNLOAD ---
     if st.session_state.app_stage == "download":
         st.markdown("---")
         st.header("Step 4: Download Final Report")
