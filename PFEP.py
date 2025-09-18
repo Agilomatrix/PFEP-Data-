@@ -184,10 +184,11 @@ class PartClassificationSystem:
         self.calculated_ranges = {}
 
     def calculate_percentage_ranges(self, df, price_column):
-        valid_prices = pd.to_numeric(df[price_column], errors='coerce').dropna().sort_values()
+        valid_prices = pd.to_numeric(df[price_column], errors='coerce').dropna()
+        valid_prices = valid_prices[valid_prices > 0].sort_values() # Exclude 0 prices from range calculation
         if valid_prices.empty: return
         total_valid_parts = len(valid_prices)
-        st.write(f"Calculating classification ranges from {total_valid_parts} valid prices...")
+        st.write(f"Calculating classification ranges from {total_valid_parts} valid prices (excluding zeros)...")
         
         ranges, current_idx = {}, 0
         sorted_percentages = sorted(self.percentages.items(), key=lambda item: item[1]['target'])
@@ -206,6 +207,7 @@ class PartClassificationSystem:
 
     def classify_part(self, unit_price):
         if pd.isna(unit_price) or not isinstance(unit_price, (int, float)): return 'Manual'
+        if unit_price == 0: return 'C' # Rule: If price is 0, classify as C
         if not self.calculated_ranges: return 'Unclassified'
         
         if unit_price >= self.calculated_ranges.get('AA', {'min': float('inf')})['min']: return 'AA'
