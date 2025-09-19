@@ -206,7 +206,8 @@ class PartClassificationSystem:
         st.write("   Ranges calculated successfully.")
 
     def classify_part(self, unit_price):
-        if pd.isna(unit_price) or not isinstance(unit_price, (int, float)): return 'Manual'
+        # --- CHANGE: Return np.nan (empty) instead of 'Manual' ---
+        if pd.isna(unit_price) or not isinstance(unit_price, (int, float)): return np.nan
         if not self.calculated_ranges: return 'Unclassified'
         
         if unit_price >= self.calculated_ranges.get('AA', {'min': float('inf')})['min']: return 'AA'
@@ -273,20 +274,18 @@ class ComprehensiveInventoryProcessor:
         st.subheader("(B) Size Classification")
         size_cols = ['length', 'width', 'height']
         if not all(k in self.data.columns for k in size_cols):
-            self.data['volume_m3'], self.data['size_classification'] = np.nan, 'Manual'
+            # --- CHANGE: Return np.nan (empty) instead of 'Manual' ---
+            self.data['volume_m3'], self.data['size_classification'] = np.nan, np.nan
             return
         for col in size_cols: self.data[col] = pd.to_numeric(self.data[col], errors='coerce')
         self.data['volume_m3'] = (self.data['length'] * self.data['width'] * self.data['height']) / 1_000_000_000
         
         def classify_size(row):
-            if pd.isna(row['volume_m3']): return 'Manual'
-            
-            # --- FIX ---
-            # Correctly access row['height'] instead of using the literal string 'height'.
-            # This prevents a TypeError when calling max() on a mixed-type list.
+            # --- CHANGE: Return np.nan (empty) instead of 'Manual' ---
+            if pd.isna(row['volume_m3']): return np.nan
             dims = [d for d in [row['length'], row['width'], row['height']] if pd.notna(d)]
+            if not dims: return np.nan
             
-            if not dims: return 'Manual'
             max_dim = max(dims)
             if row['volume_m3'] > 1.5 or max_dim > 1200: return 'XL'
             if 0.5 < row['volume_m3'] <= 1.5 or 750 < max_dim <= 1200: return 'L'
@@ -298,7 +297,8 @@ class ComprehensiveInventoryProcessor:
     def run_part_classification(self):
         st.subheader("(C) Part Classification")
         if 'unit_price' not in self.data.columns:
-            self.data['part_classification'] = 'Manual'
+            # --- CHANGE: Return np.nan (empty) instead of 'Manual' ---
+            self.data['part_classification'] = np.nan
             st.warning("'unit_price' column not found. Skipping part classification.")
             return
         self.data['part_classification'] = self.classifier.classify_all_parts(self.data, 'unit_price')
@@ -307,16 +307,18 @@ class ComprehensiveInventoryProcessor:
     def run_packaging_classification(self):
         st.subheader("(D) Packaging Classification & Lifespan")
         if 'primary_pack_type' not in self.data.columns:
-            self.data['one_way_returnable'] = 'Manual'
+            # --- CHANGE: Return np.nan (empty) instead of 'Manual' ---
+            self.data['one_way_returnable'] = np.nan
         else:
             returnable_keywords = ['metallic pallet', 'collapsible box', 'bucket', 'plastic bin', 'trolley', 'plastic pallet', 'bin a', 'mesh bin', 'drum']
             one_way_keywords = ['bubble wrap', 'carton box', 'gunny bag', 'polybag', 'stretch wrap', 'wooden box', 'open', 'wooden pallet', 'foam', 'plastic bag']
             def classify_pack(pack_type):
-                if pd.isna(pack_type): return 'Manual'
+                # --- CHANGE: Return np.nan (empty) instead of 'Manual' ---
+                if pd.isna(pack_type): return np.nan
                 pack_type_lower = str(pack_type).lower()
                 if any(keyword in pack_type_lower for keyword in returnable_keywords): return 'Returnable'
                 if any(keyword in pack_type_lower for keyword in one_way_keywords): return 'One Way'
-                return 'Manual'
+                return np.nan # Return empty if no match
             self.data['one_way_returnable'] = self.data['primary_pack_type'].apply(classify_pack)
             st.success("✅ Automated packaging type classification complete.")
 
