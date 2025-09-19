@@ -9,7 +9,7 @@ import re
 import io
 
 # --- App Configuration ---
-st.set_page_config(page_title="Inventory & Supply Chain Analysis System", layout="wide")
+st.set_page_config(page_title="PFEP Analyser", layout="wide")
 
 # --- 1. MASTER TEMPLATE AND LOGIC CONSTANTS ---
 BASE_TEMPLATE_COLUMNS = [
@@ -511,7 +511,7 @@ def render_review_step(step_name, internal_key, next_stage):
 
 # --- 5. MAIN APPLICATION WORKFLOW ---
 def main():
-    st.title("🏭 Dynamic Inventory & Supply Chain Analysis System")
+    st.title("🏭 PFEP (Plan For Each Part) ANALYSER")
 
     for key in ['app_stage', 'master_df', 'qty_cols', 'final_report', 'processor', 'all_files', 'vehicle_configs', 'pincode']:
         if key not in st.session_state:
