@@ -106,7 +106,6 @@ def _consolidate_bom_list(bom_list):
     master[qty_cols] = master[qty_cols].fillna(0)
     master = master.groupby('part_id').agg(agg_dict).reset_index()
     
-    # NEW LOGIC: Revert placeholder 0s back to NaN for accurate empty cell representation
     for col in qty_cols:
         master[col] = master[col].replace(0, np.nan)
         
@@ -179,10 +178,6 @@ class PartClassificationSystem:
         self.calculated_ranges = {}
 
     def calculate_percentage_ranges(self, df, price_column):
-        """
-        Calculates price ranges for part classification based on percentages.
-        This method now correctly accepts the DataFrame and column name as arguments.
-        """
         valid_prices = pd.to_numeric(df[price_column], errors='coerce').dropna().sort_values()
         if valid_prices.empty:
             st.warning("No valid prices found to calculate part classification ranges.")
@@ -192,12 +187,6 @@ class PartClassificationSystem:
         st.write(f"Calculating classification ranges from {total_valid_parts} valid prices...")
         
         ranges, current_idx = {}, 0
-        
-        # --- FIX ---
-        # 1. Logical Order: Process categories from lowest value ('C') to highest ('AA').
-        #    This ensures the price thresholds are calculated correctly.
-        # 2. NameError Fix: This method now uses the 'df' and 'price_column' arguments passed to it,
-        #    preventing the 'NameError'.
         processing_order = ['C', 'B', 'A', 'AA']
         
         for class_name in processing_order:
@@ -220,17 +209,12 @@ class PartClassificationSystem:
         if pd.isna(unit_price) or not isinstance(unit_price, (int, float)): return 'Manual'
         if not self.calculated_ranges: return 'Unclassified'
         
-        # Check from highest value to lowest
         if unit_price >= self.calculated_ranges.get('AA', {'min': float('inf')})['min']: return 'AA'
         if unit_price >= self.calculated_ranges.get('A', {'min': float('inf')})['min']: return 'A'
         if unit_price >= self.calculated_ranges.get('B', {'min': float('inf')})['min']: return 'B'
         return 'C'
 
     def classify_all_parts(self, df, price_column):
-        """
-        Orchestrates the classification for an entire DataFrame column.
-        """
-        # This is the correct place to call calculate_percentage_ranges, passing the data.
         self.calculate_percentage_ranges(df, price_column)
         return df[price_column].apply(self.classify_part)
         
@@ -296,7 +280,12 @@ class ComprehensiveInventoryProcessor:
         
         def classify_size(row):
             if pd.isna(row['volume_m3']): return 'Manual'
-            dims = [d for d in [row['length'], row['width'], 'height'] if pd.notna(d)]
+            
+            # --- FIX ---
+            # Correctly access row['height'] instead of using the literal string 'height'.
+            # This prevents a TypeError when calling max() on a mixed-type list.
+            dims = [d for d in [row['length'], row['width'], row['height']] if pd.notna(d)]
+            
             if not dims: return 'Manual'
             max_dim = max(dims)
             if row['volume_m3'] > 1.5 or max_dim > 1200: return 'XL'
@@ -312,7 +301,6 @@ class ComprehensiveInventoryProcessor:
             self.data['part_classification'] = 'Manual'
             st.warning("'unit_price' column not found. Skipping part classification.")
             return
-        # This is the correct way to call the classification system
         self.data['part_classification'] = self.classifier.classify_all_parts(self.data, 'unit_price')
         st.success("✅ Percentage-based part classification complete.")
 
@@ -405,7 +393,6 @@ def create_formatted_excel_output(df, vehicle_configs):
     rename_map = {**PFEP_COLUMN_MAP, **INTERNAL_TO_PFEP_NEW_COLS, 'TOTAL': 'TOTAL'}
     
     qty_veh_cols, qty_veh_daily_cols = [], []
-    # Ensure vehicle_configs is a list
     vehicle_configs = vehicle_configs if isinstance(vehicle_configs, list) else []
     for i, config in enumerate(vehicle_configs):
         rename_map[f"qty_veh_{i}"] = config['name']
