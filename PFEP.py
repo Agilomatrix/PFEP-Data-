@@ -349,7 +349,7 @@ class ComprehensiveInventoryProcessor:
             d = int(d)
             if p in ['AA', 'A']: return f"A{d}"
             if p == 'B': return f"B{d}"
-            if p == 'C': return 'C1' if d in [1, 2] else 'C2'
+            if p == 'C': return 'C1' if d in [1] else 'C2'
             return None
         self.data['inventory_classification'] = self.data.apply(lambda r: get_inv_class(r.get('part_classification'), r.get('DISTANCE CODE')), axis=1)
         self.data['RM IN DAYS'] = self.data['inventory_classification'].map(self.rm_days_mapping)
