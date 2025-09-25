@@ -34,24 +34,53 @@ INTERNAL_TO_PFEP_NEW_COLS = { 'family': 'FAMILY', 'part_classification': 'PART C
 FAMILY_KEYWORD_MAPPING = { "ADAPTOR": ["ADAPTOR", "ADAPTER"], "Beading": ["BEADING"], "Electrical": ["BATTERY", "HVPDU", "ELECTRICAL", "INVERTER", "SENSOR", "DC", "COMPRESSOR", "TMCS", "COOLING", "BRAKE SIGNAL", "VCU", "VEHICLE CONTROL", "EVCC", "EBS ECU", "ECU", "CONTROL UNIT", "SIGNAL", "TRANSMITTER", "TRACTION", "HV", "KWH", "EBS", "SWITCH", "HORN"], "Electronics": ["DISPLAY", "APC", "SCREEN", "MICROPHONE", "CAMERA", "SPEAKER", "DASHBOARD", "ELECTRONICS", "SSD", "WOODWARD", "FDAS", "BDC", "GEN-2", "SENSOR", "BUZZER"], "Wheels": ["WHEEL", "TYRE", "TIRE", "RIM"], "Harness": ["HARNESS", "CABLE"], "Mechanical": ["PUMP", "SHAFT", "LINK", "GEAR", "ARM"], "Hardware": ["NUT", "BOLT", "SCREW", "WASHER", "RIVET", "M5", "M22", "M12", "CLAMP", "CLIP", "CABLE TIE", "DIN", "ZFP"], "Bracket": ["BRACKET", "BRKT", "BKT", "BRCKT"], "ASSY": ["ASSY"], "Sticker": ["STICKER", "LOGO", "EMBLEM"], "Suspension": ["SUSPENSION"], "Tank": ["TANK"], "Tape": ["TAPE", "REFLECTOR", "COLOUR"], "Tool Kit": ["TOOL KIT"], "Valve": ["VALVE"], "Hose": ["HOSE"], "Insulation": ["INSULATION"], "Interior & Exterior": ["ROLLER", "FIRE", "HAMMER"], "L-angle": ["L-ANGLE"], "Lamp": ["LAMP"], "Lock": ["LOCK"], "Lubricants": ["GREASE", "LUBRICANT"], "Medical": ["MEDICAL", "FIRST AID"], "Mirror": ["MIRROR", "ORVM"], "Motor": ["MOTOR"], "Mounting": ["MOUNT", "MTG", "MNTG", "MOUNTED"], "Oil": ["OIL"], "Panel": ["PANEL"], "Pillar": ["PILLAR"], "Pipe": ["PIPE", "TUBE", "SUCTION", "TUBULAR"], "Plate": ["PLATE"], "Plywood": ["FLOORING", "PLYWOOD", "EPGC"], "Profile": ["PROFILE", "ALUMINIUM"], "Rail": ["RAIL"], "Rubber": ["RUBBER", "GROMMET", "MOULDING"], "Seal": ["SEAL"], "Seat": ["SEAT"], "ABS Cover": ["ABS COVER"], "AC": ["AC"], "ACP Sheet": ["ACP SHEET"], "Aluminium": ["ALUMINIUM", "ALUMINUM"], "AXLE": ["AXLE"], "Bush": ["BUSH"], "Chassis": ["CHASSIS"], "Dome": ["DOME"], "Door": ["DOOR"], "Filter": ["FILTER"], "Flap": ["FLAP"], "FRP": ["FRP", "FACIA"], "Glass": ["GLASS", "WINDSHIELD", "WINDSHILED"], "Handle": ["HANDLE", "HAND", "PLASTIC"], "HATCH": ["HATCH"], "HDF Board": ["HDF"] }
 CATEGORY_PRIORITY_FAMILIES = {"ACP Sheet", "ADAPTOR", "Bracket", "Bush", "Flap", "Handle", "Beading", "Lubricants", "Panel", "Pillar", "Rail", "Seal", "Sticker", "Valve"}
 BASE_WAREHOUSE_MAPPING = { "ABS Cover": "HRR", "ADAPTOR": "MEZ B-01(A)", "Beading": "HRR", "AXLE": "FLOOR", "Bush": "HRR", "Chassis": "FLOOR", "Dome": "MEZ C-02(B)", "Door": "MRR(C-01)", "Electrical": "HRR", "Filter": "CRL", "Flap": "MEZ C-02", "Insulation": "MEZ C-02(B)", "Interior & Exterior": "HRR", "L-angle": "MEZ B-01(A)", "Lamp": "CRL", "Lock": "CRL", "Lubricants": "HRR", "Medical": "HRR", "Mirror": "HRR", "Motor": "HRR", "Mounting": "HRR", "Oil": "HRR", "Panel": "MEZ C-02", "Pillar": "MEZ C-02", "Pipe": "HRR", "Plate": "HRR", "Profile": "HRR", "Rail": "CTR(C-01)", "Seal": "HRR", "Seat": "MRR(C-01)", "Sticker": "MEZ B-01(A)", "Suspension": "MRR(C-01)", "Tank": "HRR", "Tool Kit": "HRR", "Valve": "CRL", "Wheels": "HRR", "Hardware": "MEZ B-02(A)", "Glass": "MRR(C-01)", "Harness": "HRR", "Hose": "HRR", "Aluminium": "HRR", "ACP Sheet": "MEZ C-02(B)", "Handle": "HRR", "HATCH": "HRR", "HDF Board": "MRR(C-01)", "FRP": "CTR", "Others": "HRR" }
-GEOLOCATOR = Nominatim(user_agent="inventory_distance_calculator_streamlit_v9", timeout=10)
+GEOLOCATOR = Nominatim(user_agent="inventory_distance_calculator_streamlit_v10", timeout=10)
 
 # --- 2. CORE DATA PROCESSING FUNCTIONS ---
 @st.cache_data
 def get_lat_lon(pincode, country="India", city="", state="", retries=3, backoff_factor=2):
+    """
+    More robustly geocodes a pincode by trying multiple query formats.
+    """
     pincode_str = str(pincode).strip().split('.')[0]
-    if not pincode_str.isdigit() or int(pincode_str) == 0: return (None, None)
-    query = f"{pincode_str}, {city}, {state}, {country}" if city and state else f"{pincode_str}, {country}"
+    # Basic validation for Indian pincodes to avoid unnecessary API calls
+    if not (pincode_str.isdigit() and len(pincode_str) == 6):
+        return (None, None)
+
+    # Define a list of query methods to attempt in order of preference.
+    # Structured queries are generally more reliable than free-form strings.
+    queries_to_try = [
+        {'postalcode': pincode_str, 'city': city, 'state': state, 'country': country},
+        {'postalcode': pincode_str, 'state': state, 'country': country},
+        {'postalcode': pincode_str, 'country': country},
+        f"{pincode_str}, {city}, {state}, {country}",  # Fallback to original string query
+        f"{pincode_str}, {country}"
+    ]
+
     for attempt in range(retries):
-        try:
-            time.sleep(1)
-            location = GEOLOCATOR.geocode(query)
-            if location: return (location.latitude, location.longitude)
-        except Exception as e:
-            st.warning(f"Geocoding exception for '{pincode_str}': {e}")
-            if attempt < retries - 1: time.sleep(backoff_factor * (attempt + 1))
-            continue
+        # Respect the 1 request/sec rate limit for Nominatim
+        time.sleep(1)
+        for query in queries_to_try:
+            try:
+                location = GEOLOCATOR.geocode(query, exactly_one=True, timeout=10)
+                if location:
+                    # Success! Return the coordinates.
+                    return (location.latitude, location.longitude)
+            except Exception as e:
+                # This exception might be a timeout or a service error.
+                # We'll log it for debugging but let the loop continue to the next query/attempt.
+                print(f"Geocoding attempt {attempt+1} for query '{query}' failed with error: {e}") # Log to console for dev
+                break # If one attempt fails with an exception, break to the backoff sleep
+
+        # If the inner loop completed without success, wait before the next retry
+        if attempt < retries - 1:
+            wait_time = backoff_factor * (attempt + 1)
+            time.sleep(wait_time)
+
+    # If all retries and all query formats have failed, issue a single, clear warning.
+    st.warning(f"Geocoding failed for pincode '{pincode_str}' (City: {city}, State: {state}). Distances for this vendor will be blank. Please verify the address details.")
     return (None, None)
+
 
 def get_distance_code(distance):
     if pd.isna(distance): return None
@@ -69,6 +98,59 @@ def read_uploaded_file(uploaded_file):
     except Exception as e:
         st.error(f"Error reading file {uploaded_file.name}: {e}")
         return None
+
+def read_pfep_file(uploaded_file):
+    """Reads an Excel file assuming headers are on the second row."""
+    try:
+        return pd.read_excel(uploaded_file, header=1)
+    except Exception as e:
+        st.error(f"Error reading PFEP file {uploaded_file.name}: {e}")
+        return None
+
+def validate_and_parse_pfep(df):
+    """
+    Validates the structure of an uploaded PFEP file and transforms it into the internal format.
+    Returns:
+        - A DataFrame with internal column names.
+        - A list of detected 'qty_per_vehicle' column names in internal format.
+        - A dictionary of detected vehicle configurations (name and original column name).
+    """
+    uploaded_cols = set(df.columns)
+
+    # Check for core required columns
+    if not {'PARTNO', 'PART DESCRIPTION', 'FAMILY', 'NET'}.issubset(uploaded_cols):
+        st.error("Validation Failed: The uploaded file is missing one or more core columns: 'PARTNO', 'PART DESCRIPTION', 'FAMILY', 'NET'.")
+        return None, None, None
+
+    # Identify vehicle-specific columns based on their position in the template
+    try:
+        part_desc_idx = df.columns.get_loc('PART DESCRIPTION')
+        total_idx = df.columns.get_loc('TOTAL')
+        vehicle_qty_pfep_cols = df.columns[part_desc_idx + 1 : total_idx].tolist()
+    except KeyError:
+        st.error("Validation Failed: Could not find 'PART DESCRIPTION' or 'TOTAL' columns to identify vehicle types.")
+        return None, None, None
+
+    # Reverse the mapping from PFEP names to internal names
+    all_mappings = {**PFEP_COLUMN_MAP, **INTERNAL_TO_PFEP_NEW_COLS}
+    reverse_map = {v: k for k, v in all_mappings.items()}
+
+    df.rename(columns=reverse_map, inplace=True)
+
+    # Convert vehicle columns to internal format (qty_veh_0, qty_veh_1, etc.)
+    vehicle_configs, internal_qty_cols = [], []
+    for i, col_name in enumerate(vehicle_qty_pfep_cols):
+        internal_name = f"qty_veh_{i}"
+        df.rename(columns={col_name: internal_name}, inplace=True)
+        internal_qty_cols.append(internal_name)
+        vehicle_configs.append({"name": col_name, "multiplier": 1.0}) # Default multiplier
+
+    # Convert all part_id to string to avoid merge issues
+    if 'part_id' in df.columns:
+        df['part_id'] = df['part_id'].astype(str)
+
+    st.success(f"✅ PFEP file validated successfully. Found {len(vehicle_configs)} vehicle types.")
+    return df, sorted(internal_qty_cols), vehicle_configs
 
 def find_and_rename_columns(df):
     rename_dict, found_keys = {}, []
@@ -104,6 +186,7 @@ def _consolidate_bom_list(bom_list):
     for col in other_cols: agg_dict[col] = 'first'
         
     master[qty_cols] = master[qty_cols].fillna(0)
+    master['part_id'] = master['part_id'].astype(str)
     master = master.groupby('part_id').agg(agg_dict).reset_index()
     
     for col in qty_cols:
@@ -112,7 +195,12 @@ def _consolidate_bom_list(bom_list):
     return master
 
 def _merge_supplementary_df(main_df, new_df):
+    """Merges supplementary data based on 'part_id'."""
     if 'part_id' not in new_df.columns: return main_df
+    
+    main_df['part_id'] = main_df['part_id'].astype(str)
+    new_df['part_id'] = new_df['part_id'].astype(str)
+
     if 'part_id' in main_df.columns: main_df = main_df.set_index('part_id')
     else:
         st.error("Error: 'part_id' not found in main DataFrame for merging.")
@@ -126,8 +214,40 @@ def _merge_supplementary_df(main_df, new_df):
     
     return main_df.reset_index()
 
+def _merge_vendor_df(main_df, vendor_df):
+    """Merges vendor master data based on 'vendor_code'."""
+    if 'vendor_code' not in main_df.columns or 'vendor_code' not in vendor_df.columns:
+        st.warning("Skipping a vendor file merge: 'vendor_code' column not found in both the base BOM and the vendor master file.")
+        return main_df
+
+    # Prepare keys for merging
+    main_df['vendor_code'] = main_df['vendor_code'].astype(str)
+    vendor_df['vendor_code'] = vendor_df['vendor_code'].astype(str)
+    
+    # In vendor_df, keep only the first entry for each vendor code to prevent data duplication
+    vendor_df.drop_duplicates(subset=['vendor_code'], keep='first', inplace=True)
+    
+    # Perform a left merge. Suffix '_existing' is added to conflicting columns from main_df.
+    merged_df = pd.merge(main_df, vendor_df, on='vendor_code', how='left', suffixes=('_existing', ''))
+    
+    # Coalesce the data: prioritize data from vendor_df, but fill any gaps with original data from main_df
+    for col in vendor_df.columns:
+        if col == 'vendor_code':
+            continue
+        
+        existing_col_name = f"{col}_existing"
+        if existing_col_name in merged_df.columns:
+            # Prioritize the new data, fill NaN with existing data, then drop the redundant existing column
+            merged_df[col] = merged_df[col].fillna(merged_df[existing_col_name])
+            merged_df.drop(columns=[existing_col_name], inplace=True)
+            
+    return merged_df
+
 def load_all_files(uploaded_files):
+    # This dictionary will store the processed dataframes for the application logic
     file_types = { "pbom": [], "mbom": [], "part_attribute": [], "packaging": [], "vendor_master": [] }
+    # This dictionary will store the raw, unmodified dataframes for the final report
+    st.session_state['source_files_for_report'] = { "pbom": [], "mbom": [], "part_attribute": [], "packaging": [], "vendor_master": [] }
     
     with st.spinner("Processing uploaded files..."):
         for key, files in uploaded_files.items():
@@ -136,6 +256,10 @@ def load_all_files(uploaded_files):
             for f in file_list:
                 df = read_uploaded_file(f)
                 if df is not None:
+                    # Store a copy of the raw dataframe before any modifications
+                    st.session_state['source_files_for_report'][key].append(df.copy())
+
+                    # Now, proceed with processing the original dataframe
                     processed_df = find_and_rename_columns(df)
                     
                     if key == 'mbom' and 'supply_condition' in processed_df.columns:
@@ -151,14 +275,23 @@ def load_all_files(uploaded_files):
 def finalize_master_df(base_bom_df, supplementary_dfs):
     with st.spinner("Consolidating final dataset..."):
         final_df = base_bom_df
-        for df_list in supplementary_dfs:
-            for df in df_list:
-                if df is not None and 'part_id' in df.columns:
-                    final_df = _merge_supplementary_df(final_df, df)
+        part_attr_dfs, vendor_master_dfs, packaging_dfs = supplementary_dfs
+
+        # Process Part Attribute and Packaging files using 'part_id' as the key
+        for df in part_attr_dfs + packaging_dfs:
+            if df is not None and 'part_id' in df.columns:
+                final_df = _merge_supplementary_df(final_df, df)
+
+        # Process Vendor Master files using 'vendor_code' as the key
+        for df in vendor_master_dfs:
+            if df is not None:
+                final_df = _merge_vendor_df(final_df, df)
         
         final_df.drop_duplicates(subset=['part_id'], keep='first', inplace=True)
         
-        detected_qty_cols = sorted([col for col in final_df.columns if 'qty_veh_temp_' in col])
+        # Cast each column name to a string to prevent a TypeError if a column name is numeric.
+        detected_qty_cols = sorted([col for col in final_df.columns if 'qty_veh_temp_' in str(col)])
+
         rename_map = {old_name: f"qty_veh_{i}" for i, old_name in enumerate(detected_qty_cols)}
         final_df.rename(columns=rename_map, inplace=True)
         final_qty_cols = sorted(rename_map.values())
@@ -206,7 +339,6 @@ class PartClassificationSystem:
         st.write("   Ranges calculated successfully.")
 
     def classify_part(self, unit_price):
-        # --- CHANGE: Return np.nan (empty) instead of 'Manual' ---
         if pd.isna(unit_price) or not isinstance(unit_price, (int, float)): return np.nan
         if not self.calculated_ranges: return 'Unclassified'
         
@@ -239,6 +371,39 @@ class ComprehensiveInventoryProcessor:
         self.data['TOTAL'] = self.data[qty_cols].sum(axis=1) if qty_cols else 0
         self.data['net_daily_consumption'] = self.data[daily_cols].sum(axis=1) if daily_cols else 0
         st.success("Consumption calculated.")
+        return self.data
+
+    def recalculate_for_modify(self):
+        st.subheader("Recalculating Consumption-Dependent Values")
+
+        # Lifespan - depends on net_daily_consumption which should be calculated right before calling this
+        net_daily = pd.to_numeric(self.data['net_daily_consumption'], errors='coerce')
+        if 'qty_per_pack_prim' in self.data.columns:
+            qty_prim = pd.to_numeric(self.data['qty_per_pack_prim'], errors='coerce')
+            self.data['prim_pack_lifespan'] = np.divide(qty_prim, net_daily, out=np.full_like(qty_prim, np.nan, dtype=float), where=net_daily!=0)
+        if 'qty_per_pack' in self.data.columns:
+            qty_sec = pd.to_numeric(self.data['qty_per_pack'], errors='coerce')
+            self.data['sec_pack_lifespan'] = np.divide(qty_sec, net_daily, out=np.full_like(qty_sec, np.nan, dtype=float), where=net_daily!=0)
+        st.write("   ...Package lifespans updated.")
+
+        # Inventory Norms (QTY/INR parts only)
+        # 'RM IN DAYS' should already exist from the initial PFEP creation/upload
+        if 'RM IN DAYS' in self.data.columns and 'net_daily_consumption' in self.data.columns:
+            self.data['RM IN QTY'] = self.data['RM IN DAYS'] * self.data['net_daily_consumption']
+            if 'unit_price' in self.data.columns:
+                 self.data['RM IN INR'] = self.data['RM IN QTY'] * pd.to_numeric(self.data.get('unit_price'), errors='coerce')
+
+            if 'qty_per_pack' in self.data.columns:
+                qty_per_pack = pd.to_numeric(self.data['qty_per_pack'], errors='coerce').fillna(1).replace(0, 1)
+                self.data['NO OF SEC. PACK REQD.'] = np.ceil(self.data['RM IN QTY'] / qty_per_pack)
+                if 'packing_factor' in self.data.columns:
+                    packing_factor = pd.to_numeric(self.data['packing_factor'], errors='coerce').fillna(1)
+                    self.data['NO OF SEC REQ. AS PER PF'] = np.ceil(self.data['NO OF SEC. PACK REQD.'] * packing_factor)
+            st.write("   ...Inventory quantities (RM Qty, INR, Packs) updated.")
+        else:
+            st.warning("Could not recalculate inventory norms because 'RM IN DAYS' or consumption data was missing.")
+        
+        st.success("✅ Consumption-dependent fields recalculated.")
         return self.data
 
     def run_family_classification(self):
@@ -274,14 +439,12 @@ class ComprehensiveInventoryProcessor:
         st.subheader("(B) Size Classification")
         size_cols = ['length', 'width', 'height']
         if not all(k in self.data.columns for k in size_cols):
-            # --- CHANGE: Return np.nan (empty) instead of 'Manual' ---
             self.data['volume_m3'], self.data['size_classification'] = np.nan, np.nan
             return
         for col in size_cols: self.data[col] = pd.to_numeric(self.data[col], errors='coerce')
         self.data['volume_m3'] = (self.data['length'] * self.data['width'] * self.data['height']) / 1_000_000_000
         
         def classify_size(row):
-            # --- CHANGE: Return np.nan (empty) instead of 'Manual' ---
             if pd.isna(row['volume_m3']): return np.nan
             dims = [d for d in [row['length'], row['width'], row['height']] if pd.notna(d)]
             if not dims: return np.nan
@@ -297,7 +460,6 @@ class ComprehensiveInventoryProcessor:
     def run_part_classification(self):
         st.subheader("(C) Part Classification")
         if 'unit_price' not in self.data.columns:
-            # --- CHANGE: Return np.nan (empty) instead of 'Manual' ---
             self.data['part_classification'] = np.nan
             st.warning("'unit_price' column not found. Skipping part classification.")
             return
@@ -307,13 +469,11 @@ class ComprehensiveInventoryProcessor:
     def run_packaging_classification(self):
         st.subheader("(D) Packaging Classification & Lifespan")
         if 'primary_pack_type' not in self.data.columns:
-            # --- CHANGE: Return np.nan (empty) instead of 'Manual' ---
             self.data['one_way_returnable'] = np.nan
         else:
             returnable_keywords = ['metallic pallet', 'collapsible box', 'bucket', 'plastic bin', 'trolley', 'plastic pallet', 'bin a', 'mesh bin', 'drum']
             one_way_keywords = ['bubble wrap', 'carton box', 'gunny bag', 'polybag', 'stretch wrap', 'wooden box', 'open', 'wooden pallet', 'foam', 'plastic bag']
             def classify_pack(pack_type):
-                # --- CHANGE: Return np.nan (empty) instead of 'Manual' ---
                 if pd.isna(pack_type): return np.nan
                 pack_type_lower = str(pack_type).lower()
                 if any(keyword in pack_type_lower for keyword in returnable_keywords): return 'Returnable'
@@ -389,7 +549,7 @@ class ComprehensiveInventoryProcessor:
         st.success("✅ Automated warehouse location assignment complete.")
 
 # --- 4. UI AND REPORTING FUNCTIONS ---
-def create_formatted_excel_output(df, vehicle_configs):
+def create_formatted_excel_output(df, vehicle_configs, source_files_dict=None):
     st.subheader("(G) Generating Formatted Excel Report")
     final_df = df.copy()
     rename_map = {**PFEP_COLUMN_MAP, **INTERNAL_TO_PFEP_NEW_COLS, 'TOTAL': 'TOTAL'}
@@ -417,9 +577,10 @@ def create_formatted_excel_output(df, vehicle_configs):
     final_df = final_df[final_template]
     final_df['SR.NO'] = range(1, len(final_df) + 1)
 
-    with st.spinner("Creating the final Excel report..."):
+    with st.spinner("Creating the final Excel workbook with all source files..."):
         output = io.BytesIO()
         with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+            # --- Sheet 1: The main, formatted PFEP data ---
             workbook = writer.book
             h_gray = workbook.add_format({'bold': True, 'text_wrap': True, 'valign': 'top', 'align': 'center', 'fg_color': '#D9D9D9', 'border': 1})
             s_orange = workbook.add_format({'bold': True, 'align': 'center', 'valign': 'vcenter', 'fg_color': '#FDE9D9', 'border': 1})
@@ -460,8 +621,25 @@ def create_formatted_excel_output(df, vehicle_configs):
                 worksheet.write(1, col_num, value, h_gray)
             worksheet.set_column('A:A', 6); worksheet.set_column('B:C', 22); worksheet.set_column('D:ZZ', 18)
 
+            # --- Subsequent Sheets: Add all the source files ---
+            if source_files_dict:
+                for file_category, df_list in source_files_dict.items():
+                    if not df_list: continue # Skip if no files were uploaded for this category
+
+                    if len(df_list) == 1:
+                        # If only one file, use a clean name like "Source_Pbom"
+                        sheet_name = f"Source_{file_category.replace('_', ' ').title()}"
+                        sheet_name = sheet_name[:31] # Excel sheet name limit is 31 chars
+                        df_list[0].to_excel(writer, sheet_name=sheet_name, index=False)
+                    else:
+                        # If multiple files, number them: "Source_Pbom_1", "Source_Pbom_2"
+                        for i, source_df in enumerate(df_list):
+                            sheet_name = f"Source_{file_category.title()}_{i+1}"
+                            sheet_name = sheet_name[:31]
+                            source_df.to_excel(writer, sheet_name=sheet_name, index=False)
+
         processed_data = output.getvalue()
-    st.success(f"✅ Successfully created formatted Excel file!")
+    st.success(f"✅ Successfully created formatted Excel file with all source data!")
     return processed_data
 
 def render_review_step(step_name, internal_key, next_stage):
@@ -513,12 +691,64 @@ def render_review_step(step_name, internal_key, next_stage):
 def main():
     st.title("🏭 PFEP (Plan For Each Part) ANALYSER")
 
-    for key in ['app_stage', 'master_df', 'qty_cols', 'final_report', 'processor', 'all_files', 'vehicle_configs', 'pincode']:
+    # Initialize session state variables
+    for key in ['app_stage', 'master_df', 'qty_cols', 'final_report', 'processor', 'all_files', 'vehicle_configs', 'pincode', 'workflow_mode', 'source_files_for_report']:
         if key not in st.session_state:
-            st.session_state[key] = None if key != 'app_stage' else 'upload'
+            st.session_state[key] = None if key != 'app_stage' else 'welcome'
+    
+    # --- Stage: Welcome ---
+    if st.session_state.app_stage == "welcome":
+        st.header("What would you like to do?")
+        col1, col2 = st.columns(2)
+        with col1:
+            if st.button("🚀 Create New PFEP", use_container_width=True, type="primary"):
+                st.session_state.workflow_mode = 'create'
+                st.session_state.app_stage = 'upload'
+                st.rerun()
+        with col2:
+            if st.button("🔄 Modify Existing PFEP", use_container_width=True):
+                st.session_state.workflow_mode = 'modify'
+                st.session_state.app_stage = 'modify_upload'
+                st.rerun()
 
+    # --- Stage: Modify PFEP Upload ---
+    if st.session_state.app_stage == "modify_upload":
+        st.header("Step 1: Upload and Validate Existing PFEP")
+        st.info("Upload your existing PFEP Excel file. The application will check if the headers match the standard structure before proceeding.")
+        
+        uploaded_pfep = st.file_uploader("Upload PFEP file", type=['xlsx'], label_visibility="collapsed")
+        pincode = st.text_input("Enter your location's pincode for distance calculations", value="411001")
+
+        if uploaded_pfep is not None:
+            if st.button("Validate and Proceed", type="primary"):
+                with st.spinner("Validating PFEP file structure..."):
+                    # Read the file's content into memory to allow multiple reads
+                    uploaded_pfep_bytes = uploaded_pfep.getvalue()
+                    
+                    # Read 1: For processing with header on the second row
+                    pfep_df_for_process = read_pfep_file(io.BytesIO(uploaded_pfep_bytes))
+                    
+                    # Read 2: The raw file for the final report
+                    # Use a simple read_excel for the raw version, assuming standard header
+                    try:
+                        raw_pfep_df = pd.read_excel(io.BytesIO(uploaded_pfep_bytes))
+                        st.session_state['source_files_for_report'] = {'Original_PFEP': [raw_pfep_df]}
+                    except Exception as e:
+                        st.warning(f"Could not store the original PFEP for the final report due to a reading error: {e}")
+
+                    if pfep_df_for_process is not None:
+                        parsed_df, qty_cols, vehicle_configs = validate_and_parse_pfep(pfep_df_for_process)
+                        if parsed_df is not None:
+                            st.session_state.master_df = parsed_df
+                            st.session_state.qty_cols = qty_cols
+                            st.session_state.vehicle_configs = vehicle_configs
+                            st.session_state.pincode = pincode
+                            st.session_state.app_stage = "configure"
+                            st.rerun()
+
+    # --- Stage: Create New PFEP Upload ---
     if st.session_state.app_stage == "upload":
-        st.header("Step 1: Upload Data Files")
+        st.header("Step 1: Upload Data Files to Create a New PFEP")
         uploaded_files = {}
         file_options = [ 
             ("PBOM", "pbom", True), ("MBOM", "mbom", True), 
@@ -549,6 +779,7 @@ def main():
                         st.error("Failed to consolidate BOM data. Please check your files.")
                 st.rerun()
 
+    # --- Stage: BOM Selection (Create-only) ---
     if st.session_state.app_stage == "bom_selection":
         st.header("Step 1.5: BOM Base Selection")
         st.info("You uploaded both PBOM and MBOM files. Choose the base for the PFEP analysis.")
@@ -573,30 +804,51 @@ def main():
                 st.session_state.app_stage = "configure"
                 st.rerun()
 
+    # --- Stage: Configure Consumption (Shared by Create & Modify) ---
     if st.session_state.app_stage == "configure":
-        st.header("Step 2: Configure Vehicle Types")
+        # Dynamic UI text based on workflow
+        header_text = "Step 2: Modify Daily Production Plan" if st.session_state.workflow_mode == 'modify' else "Step 2: Configure Daily Consumption"
+        info_text = "Modify the daily production for each vehicle type to recalculate the PFEP." if st.session_state.workflow_mode == 'modify' else "Provide a name and daily production for each detected vehicle type."
+        button_text = "🚀 Recalculate PFEP" if st.session_state.workflow_mode == 'modify' else "🚀 Run Full Analysis"
+        
+        st.header(header_text)
         if not st.session_state.qty_cols:
             st.warning("No 'Quantity per Vehicle' columns detected. Consumption will be zero.")
             st.session_state.qty_cols = []
         else:
-            st.info("Provide a name and daily production for each detected quantity column.")
+            st.info(info_text)
         
-        vehicle_configs = []
-        for i, col_name in enumerate(st.session_state.qty_cols):
-            st.markdown(f"**Detected Column #{i+1}**")
-            cols = st.columns([2, 1])
-            name = cols[0].text_input("Vehicle Name", f"Vehicle Type {i+1}", key=f"name_{i}")
-            multiplier = cols[1].number_input("Daily Production", min_value=0.0, value=1.0, step=0.1, key=f"mult_{i}")
-            vehicle_configs.append({"name": name, "multiplier": multiplier})
-        
-        if st.button("🚀 Run Full Analysis"):
-            st.session_state.vehicle_configs = vehicle_configs
-            processor = ComprehensiveInventoryProcessor(st.session_state.master_df)
-            st.session_state.master_df = processor.calculate_dynamic_consumption(st.session_state.qty_cols, [c.get('multiplier', 0) for c in vehicle_configs])
-            st.session_state.processor = processor
-            st.session_state.app_stage = "process_family"
-            st.rerun()
+        if st.session_state.vehicle_configs is None:
+            st.session_state.vehicle_configs = [{"name": f"Vehicle Type {i+1}", "multiplier": 1.0} for i, _ in enumerate(st.session_state.qty_cols)]
 
+        vehicle_configs_input = []
+        for i, col_name in enumerate(st.session_state.qty_cols):
+            default_config = st.session_state.vehicle_configs[i] if i < len(st.session_state.vehicle_configs) else {"name": f"Vehicle Type {i+1}", "multiplier": 1.0}
+            st.markdown(f"**Detected Column/Vehicle Type #{i+1}**")
+            cols = st.columns([2, 1])
+            name = cols[0].text_input("Vehicle Name", default_config['name'], key=f"name_{i}")
+            multiplier = cols[1].number_input("Daily Production", min_value=0.0, value=default_config.get('multiplier', 1.0), step=0.1, key=f"mult_{i}")
+            vehicle_configs_input.append({"name": name, "multiplier": multiplier})
+        
+        if st.button(button_text):
+            st.session_state.vehicle_configs = vehicle_configs_input
+            processor = ComprehensiveInventoryProcessor(st.session_state.master_df)
+            
+            # This is the crucial step: recalculating consumption based on new inputs
+            st.session_state.master_df = processor.calculate_dynamic_consumption(st.session_state.qty_cols, [c.get('multiplier', 0) for c in vehicle_configs_input])
+            st.session_state.processor = processor
+
+            # Divert workflow based on mode
+            if st.session_state.workflow_mode == 'modify':
+                with st.spinner("Recalculating consumption-based fields..."):
+                    st.session_state.master_df = processor.recalculate_for_modify()
+                st.session_state.app_stage = "generate_report" # Skip to the end
+                st.rerun()
+            else: # 'create' workflow
+                st.session_state.app_stage = "process_family" # Go to the first processing step
+                st.rerun()
+
+    # --- Stages: Processing & Review Steps (Create-only) ---
     processing_steps = [
         {"process_stage": "process_family", "review_stage": "review_family", "method": "run_family_classification", "key": "family", "name": "Family Classification"},
         {"process_stage": "process_size", "review_stage": "review_size", "method": "run_size_classification", "key": "size_classification", "name": "Size Classification"},
@@ -621,14 +873,16 @@ def main():
         if st.session_state.app_stage == step['review_stage']:
             render_review_step(step['name'], step['key'], next_stage)
 
+    # --- Stage: Generate Report (Shared by Create & Modify) ---
     if st.session_state.app_stage == "generate_report":
-        report_data = create_formatted_excel_output(st.session_state.master_df, st.session_state.vehicle_configs)
+        report_data = create_formatted_excel_output(st.session_state.master_df, st.session_state.vehicle_configs, source_files_dict=st.session_state.get('source_files_for_report'))
         st.session_state.final_report = report_data
         st.balloons()
         st.success("🎉 End-to-end process complete!")
         st.session_state.app_stage = "download"
         st.rerun()
 
+    # --- Stage: Download Report (Shared by Create & Modify) ---
     if st.session_state.app_stage == "download":
         st.header("Step 4: Download Final Report")
         st.download_button(label="📥 Download Structured Inventory Data Final.xlsx", data=st.session_state.final_report, file_name='structured_inventory_data_final.xlsx', mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
