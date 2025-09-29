@@ -264,10 +264,18 @@ def load_all_files(uploaded_files):
                     
                     if key == 'mbom' and 'supply_condition' in processed_df.columns:
                         initial_count = len(processed_df)
-                        processed_df = processed_df[~processed_df['supply_condition'].str.contains('inhouse', case=False, na=False)]
+                        # Ensure the column is of string type and handle NaNs by filling with an empty string
+                        supply_conditions_lower = processed_df['supply_condition'].astype(str).str.lower()
+                        # Create a boolean mask for rows to be removed
+                        # The tilde (~) inverts the mask, keeping all rows that do NOT match the conditions
+                        mask_to_remove = (supply_conditions_lower.str.contains('inhouse', na=False) |
+                                          supply_conditions_lower.str.contains('make', na=False) |
+                                          (supply_conditions_lower == 'e'))
+                        processed_df = processed_df[~mask_to_remove]
+                        
                         removed_count = initial_count - len(processed_df)
                         if removed_count > 0:
-                            st.info(f"   Removed {removed_count} parts from an MBOM file marked as 'Inhouse'.")
+                            st.info(f"   Removed {removed_count} parts from an MBOM file marked as 'Inhouse', 'Make', or 'E'.")
 
                     file_types[key].append(processed_df)
     return file_types
